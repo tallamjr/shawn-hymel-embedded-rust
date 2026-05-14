@@ -4,6 +4,7 @@
 ARG RUST_VERSION=1.85.0-bookworm
 ARG RUST_BOOK_VERSION=async-2024
 ARG RUSTLINGS_VERSION=6.4.0
+ARG MDBOOK_VERSION=0.4.43
 ARG USER=student
 ARG WGET_ARGS="-q --show-progress --progress=bar:force:noscroll"
 
@@ -17,6 +18,7 @@ FROM rust:${RUST_VERSION}
 ARG TARGETARCH
 ARG RUST_BOOK_VERSION
 ARG RUSTLINGS_VERSION
+ARG MDBOOK_VERSION
 ARG USER
 ARG WGET_ARGS
 
@@ -76,12 +78,12 @@ RUN rustup target add thumbv6m-none-eabi && \
     rustup target add thumbv8m.main-none-eabihf
 
 # Install essential tools for embedded development as the student user
-RUN cargo install \
+RUN cargo install --locked \
     cargo-binutils \
     flip-link \
     elf2uf2-rs \
     rustlings@${RUSTLINGS_VERSION} \
-    mdbook
+    mdbook@${MDBOOK_VERSION}
 
 # Install linting, formatting, and inspection tools
 RUN rustup component add \
