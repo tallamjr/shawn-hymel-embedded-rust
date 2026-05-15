@@ -1,0 +1,394 @@
+Previously, we spent some time talking about why Rust is catching on as a systems language
+and some of its limitations. We made a simple Hello World application, but we did not touch
+our microcontroller. Well, it's time to fix that. I'll walk you through creating your first
+embedded Rust application. In the last episode, I recommended reading through chapter three
+in the Rust book and trying a few rustlings exercises. In this episode, we'll see some
+of those concepts in action as we develop a simple blinking LED program. Let's get started.
+For this tutorial, you will just need an LED connected to GPIO 15 on your Raspberry Pi Pico 2
+or 2W. You should add a 220 ohm resistor from the LED to ground. To start, go into VS Code and make
+sure you are working inside of your container that you constructed in the last episode. From here,
+go to view terminal to bring up a terminal. We'll work in bash. I was in rustlings last time, so let's
+get out of that. Let's go into our apps directory and we can use the cargo meta tool to create a new
+boilerplate project for us. We'll say cargo new and then we'll give it a name. In this case,
+blinky by default, it will assume you're making an executable or a binary, but just to be explicit,
+I'll put dash dash bin to show that we are creating a binary project by default. Cargo also assumes that
+you are using get diversion control your project. It will add a dot get folder. This kind of messes up
+what we're doing inside of this project repository. That's already a get project. So we can say dash dash
+VCS for version control system and say none. So it won't create any sort of extra boilerplate for
+version control software. Press enter, refresh your files and you should see blinky up here.
+Note that it gives you a source with a main. We'll bring that up. It gives you a basic hello world,
+just like the one we created in the last episode. And it gives you a starter cargo dot tunnel.
+I'm pretty happy with the way this package is configured. We'll keep the name blinky.
+We'll call it version 0.1.0 and we'll keep with rust edition 2024. Now we need some dependencies
+to help us work with our particular embedded system. One of the brilliant moves with cargo is
+that it integrates with crates.io. It's easy to package up any software or libraries you make
+and ship them off to crates.io, which is run by the rust community. And with the integration with cargo,
+you can upload packages to here and find them within this system. The first thing we need is
+a hardware abstraction layer for our particular chip. In this case, we're working with the RP 2350.
+After some searching, I found this RP 23 five X dash how. And if we look into this, you can see
+that it is part of this RP hal repository. If you go in here, you can see it's quite a popular
+repository. And this is a community maintained hal for both the RP 2040 and the RP 2350 series.
+It also has some examples, which I recommend going in here to check out if you'd like to go beyond what
+I show you in this series for the raspberry pi microcontrollers. If you go back to crates.io,
+we also need embedded.hell. This is another hardware abstraction layer, but it doesn't compete with
+the RP 23 five X how that we're using. It offers some extra libraries and interfaces that many of the
+hardware specific house like the RP 23 five X adhere to. So we will need this in order to call
+various functions that work with our RP 2350. So generally you end up kind of using embedded how together
+with your chip specific how. Then we will need cortex M this provides a lot of the low level support
+for things like registers and peripheral access to arm cortex and processors. Even though we're
+including a hell, we generally need to include this and the similarly named
+cortex.mrt library. This is the runtime for arm cortex and microcontrollers. So those are the four
+basic libraries we'll need from crates.io in order to get something working on our RP 2350.
+Let's go to our dependencies. We'll first specify what we need from RP 23 five X. Hell. Notice that we can
+put various things inside these curly braces. So for example, we can specify the version of that
+how library and we can call out specific features we want to include that don't come by default.
+In this case, we need the runtime. So RT and the critical section implementation. These will handle
+some low level stuff for us. You can look up the documentation for the RP 23 five X. Hell. These are
+the features that you can optionally include. We generally need this critical section implementation,
+especially for that RP series. They have two cores. We won't dive into doing multi core in this, but you
+do need it even for basic blank right now. And then just like we saw for the cortex.mrt, we need the
+minimal startup and runtime feature to get things working. Feel free to look through the rest of
+these, but these are the two we need as a bare minimum right now. All right, back to our code.
+We'll specify the embedded howl crate. Note that I'm not breaking out things like version and features
+here. If you just put a string with a version number, it assumes you mean the version. So I'm
+neglecting the curly braces here and just adding this version number. I can get the most recent
+version number from crates.io. So that's where I'm getting these numbers from for basic cortex.m features.
+We'll just include version 0.7.7 and the latest version of the cortex.m runtime. When I created this
+was 0.7.5 in this profile section for development or debug, this is where you would call out things
+like compiler optimizations. We'll look at that in a future episode, but note that I'm just going to put
+a placeholder here for the future. Let's file, save this unlike regular rust that we looked at in the
+previous episode. We need to include some very specific things so that the compiler knows how to
+build for our target and how to lay out the memory appropriately. I'm going to close this terminal
+so you can get a better idea of what I'm doing here. Over in the explorer, I'm going to create a new
+folder called dot cargo. And then in there, I'm going to create config dot toml. And the naming is
+important here because when cargo builds, it will look for this config dot toml in this dot cargo folder
+for some extra configuration. These are things we can't put in cargo dot toml and it's things like very specific
+compiler and linking flags. First, we need to call out the exact architecture for our target. This is how
+the compiler knows which processor to build for. We set the target to thumb V8M, which is the architecture of
+this specific arm cortex processor. And then we give it the option of main none EAB I H F that F means float.
+So we're enabling our floating point unit in this processor that will allow us to quickly perform math
+operations with floating point numbers. Then for that specific target, we can list some flags. So we say rust
+flags, and these are all very specific keywords that the build system looks for. The first thing is
+setting some compiler optimizations. So we give it the dash C as one of our compiler flags and then say
+target dash CPU. We say the cortex M 33. That's the actual arm processor inside of the RP 2350.
+Unfortunately, our included libraries don't quite know how to lay out the memory for our specific chip.
+So we're going to use a link dot X script that comes with cortex M RT to lay out the memory,
+but we have to provide that memory layout in a separate script, which we will do next.
+We tell it to use that link dot X script by providing this dash C link, arg equals dash T link dot X. So
+it's going to run that script to lay out the memory for us so that the processor, when it boots, it knows
+where to look for, say our program memory and where it can find sections of SRAM versus where to look for the
+heap and so forth. But as far as I can tell, we are not going to be using the heap at all in this series.
+From what I can tell, the rust build system will pad with zeros between various sections in memory.
+We can use this linker argument and magic, so dash dash and magic to prevent that. It just saves us some space,
+which is often quite tight on many of these embedded systems. So I don't think this is completely necessary,
+but it's generally good to include for embedded projects. Let's go to file safe. And these are
+the basic flags we need to get started. I mentioned that we need to manually map out our memory and we're
+going to create one memory map that we can use for the rest of the series. So we're going to create a
+new file and it needs to be called memory dot X in the top level of our project here. This naming is also
+important because it's where this link dot X script expects to find a memory map. Go back to the top
+level of that RP hal repository that we were looking at that contains the hal for our RP 2350 or RP 23,
+five X go into examples. And if you scroll down, you'll find this memory dot X. We are just going to
+straight steal this because it's known to work with our Pico to feel free to look at the RP 2350 data sheet.
+And you can see how the various memory components are laid out and their addresses.
+So you can see we have a section of two megabytes. You could increase to four for the Pico two, if you
+wanted to for our flash memory, this is where we store things like our code. We have 512 kilobytes of
+memory available for RAM and starting at this address. There's also these two separate banks
+that are dedicated to each of the cores. If I recall correctly, we won't need these, but it maps them
+anyway. So this is a good starter memory map for any RP 2350 projects you decide to do with rust. There's
+also a section for booting. We will have to provide a brief snippet of probably confusing code to manually
+load in a bootloader or a boot program that tells the RP 2350 how to boot. Remember, we're doing this
+all in bare metal at first. At the end of the series, I will show you how to do this with embassy,
+which simplifies this process. But hopefully this shows you the connection of rust to real hardware.
+And it's a good way to get introduced to the language itself. There's a section of memory you can
+put aside for Pico tool. We won't need that, but it's generally good to have for your projects.
+If you're using things like Pico tool and they put aside a section of flash memory for a digital
+signature, if you want to enable something like secure boot so that you can say digitally sign your
+binary, this is all we will need. So let's go to raw and a press control a, I'm going to press control
+C to copy this. Let's go back to our code. And I'm just going to paste this directly into memory.exe and
+get rid of one of these lines and file save. With that, we are finally ready to write our program.
+The good news is as we're writing this, you will have a template to get started with. Don't worry if
+you don't fully understand exactly what's going on here. We're going to be building on top of this.
+Just consider this boilerplate code that you need in order to run anything on the RP 2350.
+So let's go to main dot RS. We'll get rid of this. We will not be using the standard library for our
+code because it takes up too much space. It usually relies on an underlying operating system, which we
+don't have for our microcontroller. So to not include standard, which comes by default,
+we have to specifically say no standard. And we do that with this, what's known as an attribute
+given by this hash or pound sign and brackets. And then we say no standard, this exclamation point.
+So hash exclamation point means it's an inner attribute. This means that the attribute applies
+to the entire program. So this is how we say we do not want to include the standard library in our
+program. The next thing we say is we don't want a main entry point. We do that with another inner
+attribute. By default, Rust assigns the function main as the entry point to the program. There's a lot of
+things that go on on the back end when a program enters, like setting up sections of memory, maybe
+your stack and heap, giving it its own process, maybe its own thread inside your operating system,
+connecting it to say the console for printing out. There's a lot of things that go on. We don't have
+any of that on our embedded system since this is bare metal. So we're going to tell Rust,
+do not include a main entry point. And we're going to override that with our own entry point.
+One of the other things that Rust does when it fires up a program is it creates a panic handler for
+you. And usually this just says maybe like print something to standard error on your console. Once
+again, we don't have an operating system. So we are going to write our own panic handler. We will need
+from the core library, which comes default with Rust, this panic info, which we will use to write our
+very basic do nothing panic handler. Without a panic handler, this program will not build. As you might
+have seen in C++, we can dive into libraries and their various namespaces with colon colon. So core is
+the core library, colon colon, in that look for the panic namespace. And then in there, let's get the
+panic info, whatever that is, that could be a struct or an enum or a whole separate module. We will also
+import our RP 23, five X hal notice that we can use this as keyword in order to alias it. Ideally,
+we could switch out this particular chip hal for something else like the RP 2040 or maybe an STM 32 hal
+and the program should just work. The reality is that won't always quite work because as you'll see,
+there will be some chip specific things we have to do, like for example, setting up clock or clock
+speeds and whatnot. So you might think it's going to be perfectly portable code and it's not really,
+but a lot of examples use this aliasing in the hopes that your code is portable. A trait is much
+like an interface from other languages. Embedded hal sets up a lot of traits that the specific
+implementations like the RP 23, five X hal use in order to actually give you features like timers and
+delays and buttons or pins because the concrete implementations of the house rely on these traits.
+This is where we need that embedded hal so that the concrete hal like our RP 23, five X knows what
+to use when we build it and link it. Ideally, IntelliSense should be working because we have that rust
+analyzer extension installed. Sometimes this doesn't quite load in the Docker container. If you're running
+locally, this should not be a problem. What I have found sometimes is if you go to file, open workspace
+from file and choose that default code workspace, it should work. If that does not work, you can do
+control P type a little greater than symbol and you can say rust analyzer restart server. Sometimes that
+kicks rust analyzer into working. Give it just a second to load up everything. All right. Once that finishes,
+everything should load. Yes. Now I'm getting information about that particular trait. So you
+see public, it's a public facing trait delay NS with any luck. I can right click, say go to definition
+and there's the actual source code for delay NS. So if you need to dive into any of this,
+make sure you get IntelliSense working. You might have to refresh rust analyzer to get that to work.
+And now when I do colon colon, it should actually give me potential options from that particular library.
+So in this case, we want digital and we want output pin. Here is where we're going to write that custom
+panic handler. As I mentioned, it's not going to do anything. It's just going to loop forever. So it just
+catches anything that goes wrong and just hangs your processor, which is fine. You can also use this to
+print out debugging information or maybe blink of led in a certain way to demonstrate an error. But for now,
+we'll just hang the processor. We will use an outer attribute that's given by this pound symbol
+and then in brackets panic handler, the build system will know what to do with this.
+This decorates whatever's right underneath it. So that's what makes it an outer attribute as
+opposed to the inner ones with the exclamation point that applies to the whole program. We have to
+specifically create a function. So function FN panic, the parameter is underscore info colon. And then we
+have to give it a type because rust is strongly typed. It wants all of our parameters to be given a
+type, a very specific type we can use generics, but we will talk about those later for now. It wants a
+reference. So ampersand panic info. And then we give the return type of the function
+that's given by this arrow. And then the return type. Normally we would put a return type of
+something in here, but an exclamation point is a unique keyword that means that this function
+never returns. So this is our catch. It loops forever. And we tell the rust build system that
+this is not expected to return in there. We call loop loop is a basic do forever do while true loop.
+And then open curly brace, close curly brace means we do nothing in that block of code. And that's it.
+We'll close out our function and we've written our panic handler.
+As I mentioned earlier, we do need to copy some data to the start block. We're not really writing
+our own bootloader here because that should be handled for us in the hardware, but we do need
+to copy some metadata about the program. Otherwise the boot ROM doesn't really know what to do with it.
+This seems to be something that's unique to the RP 2350. You'll likely run into it
+with some other more advanced cortex and processors like the M 33s. To do this, we use the attribute
+unsafe link section equals dot start block. And that string should line up with the string we saw in the
+memory dot X file. The unsafe keyword is used to mark a section of code as known unsafe code. And this
+is how you get around the borrow checker and the safety aspects of rust in a lot of embedded code.
+Because we do things like get pointers to sections of memory that we use for registers and peripherals
+that becomes by default unsafe code. And a lot of libraries underneath use unsafe blocks and then give
+you a safe way to use those unsafe blocks. But in this case, we have to copy this section and we have to do
+it with this unsafe link section statement. We also decorate with this used attribute. This tells the
+compiler to keep a static variable around instead of optimizing it away, even though it appears to be
+never used. We define this image def variable with type how block image def. And we give it this how block
+image def secure exe. This statement, you can basically just consider boilerplate code for your RP 2350.
+As long as you're doing bare metal, we essentially need it. And you can dig into it if you'd like,
+but it's just copying that metadata to that start block so that the program can actually boot.
+Finally, we can get into some real code. We will set the crystal frequency here. This should match with
+the crystal frequency on the board, which is 12 megahertz for the Pico two. The const keyword is used to set up a
+constant value for a variable by convention. These variable names are in all capital letters. So
+X or crystal oscillator, crystal frequency, colon, we'll give it a type here. So for constants, you have to
+very specifically give it a type so that the compiler knows what it should be used as. And then we will give it the
+value 12 million for 12 million Hertz. You can use underscores here in places of commas to make this
+a little easier to read, or you can just neglect them and just write 12 and six zeros to make this
+work. But I like the underscores. It makes this easier to read. Next, we're going to write our main
+function and this is going to override the default main entry point that inner attribute we set earlier
+that said, no main. This is going to replace main. We'll use the outer attribute, how colon colon entry
+that comes from our RP 23, five X, how this is the attribute that decorates the main function
+that says, treat this as the entry point to our program. Then we will write the main function. So
+F N for function, give it the name of the function main. We won't have any parameters and the return
+type is exclamation point, which means that this function never actually returns. The first thing
+we're going to do is get access to our hardware peripherals. So we can do things like set up a pin.
+We are going to get ownership of these peripherals. Don't worry too much if ownership doesn't quite
+make sense yet. We're going to spend an entire episode talking about what ownership means.
+The basic concept here is whenever you create a value or a struct, it's not really objects in Rust,
+but you can think of structs as kind of like objects. Whenever we create one, there can only ever be one
+owner. That means one variable can own that struct value enumeration, whatever. You can pass that to
+another variable, but then the previous variable no longer has ownership and the compiler will fail
+if you attempt to use a variable that has given up ownership. That's the basic rules. We'll dive into
+that more. And there's also references and borrowing that we'll get into. But understanding that there can
+only be one owner can make this a little tricky sometimes. So to assign a variable, we're going to say,
+let that's the basic assignment. We're going to say mutable, which means we can change this. So by default
+variables are immutable in rust. So if we want to be able to change things or values in that variable,
+we have to use this mute keyword. And then we give the variable name in this case,
+PAC for peripheral access crate to get that PAC. We go into our house. So that's the RP 23, 5x.
+How we go into the pack namespace, we get peripherals and we call the take function.
+Now take returns a very specific type and we have to call unwrap to get what's in there. So with that
+written out, let's take a look at what's going on here. So take returns an option option is something
+that's built into rust. I believe as part of the core library, if we go into the definition of this,
+this, you can see it calls some other stuff on the backend. But what we're concerned about here is
+this returns option and self. So whatever type that is, that gets returned in this option. So if we go to
+definition, an option is an enumeration that can consist of two values. It can be none or it can be
+sum and whatever type. So T is in that sum rust does not have null or none as a default type because
+that can sometimes be memory unsafe. So it gets around this by creating this and providing for us
+option T. So T for type, and we'll get into generics. Think of them like templates. If you're
+used to C plus plus, this can define any type you want. And we can see if whatever got returned is
+none, which means some error occurred. We didn't get anything back or we get something and we can
+unwrap whatever's in here and get that value. So that's what we're doing here with unwrap. So we get
+an option, we unwrap it, we get the value that was in that sum and that gets set to our PAC.
+Now if take returns none, unwrap will essentially fail and it panics, which means if something failed
+with our peripherals, it returns none unwrap says, I don't know what to do with none. I'm going to
+panic. It is caught by our panic handler and just loops forever doing nothing. So it will stall our
+processor. As I mentioned, rust is a strongly typed language. So pack when it's declared as a variable
+must be given a type. You could put colon and list the type here. The rust compiler is very intelligent
+and very powerful and it can infer the type from unwrap. So it will look at what comes out of some
+intake, what comes out of unwrap, get to that type and make pack that type by default rust analyzer and
+intellisense will spell out this type for us. So on my windows computer, if I push control and alt,
+you can see that pack is type peripheral. So we can manually type this or you can push control and
+alt together and get that. If you install rust analyzer extension manually or locally, this will be shown
+by default. I hid this by default to make this code a little less verbose. And so you could see how it would
+actually be typed, but feel free to press control and alt together. I'm assuming that's command and alt on
+a Mac to be able to see the type or inferred type here. The next thing we should do is configure our
+clocks and the watchdog timer. We're not going to actually do anything with the watchdog timer. It's just
+in my experience, it needs to be declared and active for the RP 2350 to actually run. So all we're going to do with
+this is we're going to create a new watchdog timer. So once again, let mute watchdog equals from the
+how the watchdog namespace new, and we're going to get the watchdog type that's within pack. This creates
+a new instance. This is similar to creating objects with say the new keyword in like C plus plus or Java.
+But remember, they're not really objects if we dig into new here. So let's go to our definition. You can
+see that new is part of watchdog and watchdog is a public struct. So it can hold some data, but we can
+also assign functions to it using this implementation or implement keyword. So in that case, it's kind of
+like an object from other OOP languages where an object can hold data and perform functions.
+Structs can hold data and perform functions in rust. And we do that by saying, here's the struct.
+So I believe if we go to the definition here, there's the original struct. And if we come back
+down to the implementation, you see that it implements this public facing new function. You have to give it
+a watchdog from some other crate. So then it creates this struct that holds the watchdog and it preloads
+a value. And then it allows you to interact with the watchdog. We won't get into watchdogs here,
+but we need it for our program to run. So we've created a new instance of our watchdog. Note that
+we have essentially ownership right now. Then we need to initialize our clocks and our phase lock loops.
+You can also consider this to be essentially boilerplate code that just needs to be run
+for the RP 2350 to work in the how clocks namespace. We're going to call in it clocks and PLLs.
+We're going to provide some specific information. We'll give it the crystal frequency that we declared
+as constant earlier. We'll give it the oscillator clocks, PLL sys and PLL USB from that peripheral
+access crate. And then we will give it mutable references for pack.resets and immutable reference
+to our watchdog. We will dive into references and borrowing later, but know that we have to call
+this function and we have to give it all of this information in order for the program to actually
+run in it and for it to set up the clocks and understand what the clocks are running at. From here,
+we will get the return from that init clocks and PLLs function and we will call dot.ok.
+Similar to option that has none or some, this init clocks and PLLs returns a result. This is much like
+that option. A result which is built into the core library contains two options. It contains okay
+and maybe some return value. So given by T or it can return an error which can contain some error value
+given by E. So hence we have this generic, think of it like a template if you're coming from C++,
+where you can define it with types T and E. So rather than none or some, you can have something
+contained in that error. This is the other way to return either something happened and it's okay
+or some type of error code. If you've worked in other systems, maybe Zephyr or Linux,
+okay might be zero and any integer that's non-zero means an error and you can often look up an error code
+from that. This allows us to wrap individual return values if you need to and error messages or error
+codes if you need to. So let's go back to our code. Okay. Actually takes that result type and converts it
+to an option type. So with option, we now have some or none and we can call unwrap again to get the value
+in sum. So essentially whatever was in okay gets unwrapped and assigned to this clocks variable.
+Note that it is immutable by default. And if there was an error, we're simply going to catch that
+and run our panic handler to get access to our GPIO. We first need to get access to our single cycle I O
+block. As far as I could tell, this is something unique to arm processors. Other processors might implement
+it, but it's a hardware feature in a lot of Cortex M processors that allow us to do fast GPIO, say,
+toggling or manipulation. Then we're going to split off ownership of a very particular section of that
+SIO block. We're going to get access to our peripherals. Once again, you can consider this
+essentially boilerplate code for getting access to your pins. We're going to call hal GPIO pins new.
+So this is creating a new basically pins struct. We're going to pass in the IO bank that we want to
+get access to the pads bank and that SIO struct we just created and say GPIO bank zero. We will also
+pass an immutable reference to pack.resets. We will assign all of that to pins and we'll use access to
+that pins in order to toggle a very particular pin. If we go to the definition of that IO bank,
+from what I can tell, the RP 2350 only has one IO bank. It's bank zero, but we still have to pass it
+in because other HALs might assume there are multiple banks for IO. So IO bank zero pads, bank zero,
+and then SIO GPIO bank zero. Here are your available registers for those various banks.
+And as you can see here, there's really only bank zero for GPIO, but we still have to do this because
+this is using an interface that assumes you might have multiple banks for your say IO pins.
+If we go to the definition of that new function, we take ownership of specifically the pins,
+leaves ownership available for other peripherals, and we just take ownership of a particular SIO slice.
+So this is how instead of taking ownership of all of the peripherals and all of that SIO,
+we can just get ownership of just say pins. If you scroll through this code, you can see where unsafe
+is used quite a bit in order to split off access to sections of memory, meaning access to our GPIO pins
+for our purposes. It looks like this reset from the pack we pass in is used to control the reset state
+of the various peripherals. So we have to pass all of that in from our peripheral access crate so that
+our RP 23, five X HAL knows what to do with it. After all of that setup, we're finally ready to do
+something with our pin. So we're going to create a handle to our pin. We're going to say let mutable
+led pin and we're going to let that equal to pins dot GPIO 15. So that's the pins we just created
+or now have access to in there. There are a bunch of options so we can press control and alt to see
+that pins is of type pins. We can go to the definition over here. If you'd like to see what
+that looks like and there are various pins available for the RP 2350. I will fill out GPIO again and you
+can see the various pins available for that microcontroller. So we're going to go 15 because
+that is what our led is attached to and we have to convert that into a push pull output pin rather
+than say an input pin. This is how you would control say the data direction. If you go to the RP 23,
+5X HAL documentation, scroll down, you will see modules. So when I was saying namespaces,
+it's actually calling into these modules. If we go to GPIO in here, you will find a struct named pin
+because we saw that was the type that we are creating here. You have the methods that are
+available. These are the functions attached to this particular struct and you can see we have
+different ways to initialize various pins. So we were doing into push pull output.
+Here is that function signature with some documentation. You can see it returns a pin
+that has been configured for us and you can specify the initial state if you want to using this other
+method here into push pull output in state. But we're just going to use this and toggle that pin.
+Next, we're going to move ownership of the timer zero peripheral to create a timer struct that we will
+use to create things like delays. So we will say let mutable timer equals hal timer new timer zero.
+And in that function, we will give it from our peripheral access, create timer dot zero.
+We will give it a mutable reference to pack dot resets that we've used earlier that controls the
+reset state of the various peripherals. And we will give it a immutable reference to clocks that we set
+up earlier. I'm going to move these two new lines so it's a little easier to read this function.
+If you bring up the RP 2350 data sheet, go into peripherals, go into system timers. Let me zoom in
+a little bit here. Let's go to overview. You can see that the RP 2350 has two timers, timer zero and
+timer one. These are tied directly to hardware and they give us access for things like alarms and counters
+and so forth. So if we go back to our RP 2350 hal, you can see these re exports where it's exporting the
+RP 2350 pack as pack. So that's when we're calling pack, we're actually calling this RP 2350 pack. So
+let's go into here. And you can see there are two timers, timer zero and timer one, which line up
+exactly with that hardware we saw in the data sheet. So let's go back to our code. And that's what we're
+passing in to create our new timers here. So in fact, if we go to this definition, we should see
+create new timer zero and create new timer one. So that gives us access to that timer hardware.
+All right, back in our code, we've got our timer set up. Now we can use it to set the pin high to turn
+on that led. We have a number of methods associated with that type. So I'm going to press control alt.
+You can see it is of type pin and it's been assigned to GPIO 15. So one of those methods is set high.
+That toggles the pin high. That's going to return a result for us and we can call unwrap directly on
+that to get the value inside of okay. Otherwise run panic. We don't need to worry about whatever that
+return type is because it's just going to perform the function and do nothing else.
+But it does tell us if it succeeds or fails.
+Now that we've set up that timer, we can actually use delay functions. So delay ms for milliseconds.
+We're going to say 500. So 500 milliseconds. That's half a second. I'm going to press control alt.
+And if you're curious, that timer is of type timer and the concrete type is copyable timer zero. So
+timer with these angle brackets means it is a generic and it's a timer device. So that copyable timer
+makes this a concrete type for us rather than this generic. So that also has some methods associated
+with it. In this case, we're using delay ms.
+So we're going to say set low to turn the led off.
+We're going to say delay ms 500 milliseconds again. Okay. We are done with our code. So we can say file
+save and let's go to view terminal.
+Let's navigate into our blinky directory. This is where we're keeping our code and all of our setup
+with all of that configured. We should be able to say cargo build. This will take a moment because as
+you can see, there are a lot of dependencies that get downloaded to make this work for us. So let that
+compile with any luck. You should see that it has built. If you refresh your files, you should see
+a target folder in there with the debug target, but nothing's in debug because we set up a specific
+target for our microcontroller. That's actually under this thumb V8 M target debug. There's our
+executable. This will not execute on your computer because it is compiled for a different architecture.
+This is essentially a dot elf file. So you can treat it as a dot elf file. If you were using any sort of
+debuggers or separate programmers, but it's not given the dot elf
+extension. If you have the debug probe
+for the raspberry pi, you are welcome to use this
+to flash it to your raspberry pi Pico. In fact, I'll show you how to do that in a future episode,
+but I'm going to assume you don't have a debug probe right now.
+We want to convert this to a dot UF two so that we can just drag and drop right to the Pico
+with this image. I've pre-installed Pico tool, which is something raspberry pi maintains
+that allows you to interact with connected raspberry pi devices or turn elf files into dot UF two files,
+which is what we're going to use it for. So we're going to use the UF two sub command in Pico tool.
+We're going to say convert and we're going to find that elf file. So remember that's in target
+thumb V8 M dot main none EAB I H F. That's our target. We set up going to the debug profile and we're going to say
+blinky. That is the elf file with no extension foot. We're going to say dash T. So treat this as an elf file
+and without any flags, we're just going to say where to dump this dot UF two file and we're going to
+put it locally in this blinky directory and we're going to give it the name firmware dot UF two press
+enter. And in my case, I can do L S and you can see firmware dot UF two has been created. Now we are
+ready to flash this to our Pico to remember that workspace is mapped to our host computer. So we can
+switch over to our host computer and drag and drop that to put your Pico two into bootloader mode,
+hold the boot cell button on the board and plug in the USB cable. Your device,
+your RP 23 50 should show up as a mass storage device. So in your introduction to embedded rust repo
+that we've been working in, go into workspace, go into apps blinky. There is the firmware dot UF two
+that we created. I'm going to right click, copy that. I'm going to scroll down to my RP 23 50 mass storage
+device drive. I'm going to paste that in there with any luck. It should automatically restart. If uploading
+your program worked, the led should be flashing once per second before the likes of Arduino and
+micro Python, getting to a blinking led with most microcontrollers was often quite difficult and
+required a lot of setup. You can see that the current rust embedded frameworks, at least for bare metal,
+do not hide these details from you. So we're back to putting in a lot of effort to create a simple
+program. That's okay. We've proven that we can run code on the hardware. We can start building on this
+example going forward. If you happen to be working with the original raspberry pi Pico or some RP 2040
+variant, I have a version of blinky that should work for that processor in the GitHub repository.
+Feel free to check it out. There's no specific homework for the next video, but feel free to get
+started on chapter four as wrapping your head around ownership can be daunting. In the next episode,
+we'll expand on our blinky demo to add USB serial, which is crucial for basic print debugging without
+something like the debug probe that will form the basis of our template for all our Pico two demos for
+the rest of the series. Stay tuned.

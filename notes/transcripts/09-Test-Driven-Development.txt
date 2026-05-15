@@ -1,0 +1,242 @@
+Test driven development is a method of writing code that involves writing automated tests first
+and then developing code to pass those tests. It's widely adopted in professional programming
+circles and can help lead to fewer bugs being shipped in your code. Now that we have the basics
+of embedded rust out of the way, we can start looking at how to apply those concepts. We'll
+start by seeing how to use test driven development for embedded code. This can be a little tricky
+as it often means writing dummy or stub implementations of protocols so we can create automated tests.
+I'll show you how to create a stub I squared C implementation so we can create automated unit
+tests for our TMP 102 driver. We wrote a few episodes ago. The basic idea behind test driven development
+is that you write your tests before you write your functional code in the first phase often called
+the red phase. You create a unit test around some feature request or bug you wish to fix. You sometimes
+need to write just enough functional code that the test runs, but it should be failing at this point.
+You then write functional code such that the test passes. This is known as the green phase. Your code
+might not be fully optimized. So then you move into the refactoring phase where you rewrite your functional
+code in an optimized way. This is sometimes called the blue phase. The refactoring process will sometimes
+introduce new bugs or you'll often need to tackle a new feature request. So you then do the cycle again, adding a
+test, writing functional code until it passes and refactoring your code. You'll often see tests broken out into three
+categories. The first is unit tests. These are usually simple automated tests that verify the correct
+operation of individual values, methods or functions in your code. Next are integration tests where you
+verify that larger components operate together. Then you have system or end to end tests that verify that
+everything works together. This is usually where you test the entire application and it can often be quite
+time consuming depending on the complexity of your program. As we'll see unit tests are usually
+possible in embedded code, but integration and system tests become much trickier as you either need to
+automate testing with real hardware known as hardware in the loop, or you have to find ways to emulate the
+functionality of low level drivers like GPIO and I squared C. If we're testing our TMP 102 driver, we'll need to emulate the
+I squared C driver. Since we won't be using hardware in the loop, you'll see the following types of
+substitutions used quite often in test driven development. The definitions can vary depending on who
+you ask. But here are some of the terms you'll come across. The first is a dummy. This is when something in
+the code like an object, struct or value is passed around, but doesn't actually do anything. It's just there to fill out
+parameters in say function calls. The next is a fake. These are objects or structs that have mostly working
+implementations, but they can take shortcuts which make them not really suitable for production. Then you
+have a stub. These are bare bones implementations of classes, structs or functions that provide canned
+predetermined responses to calls. They usually do not respond to anything other than what's needed for the tests.
+Sometimes you'll see the term spy, which is similar to a stub, but it records information on how the function
+or class was called or used. Mocks are similar to stubs, but they offer more implementation under the hood.
+They usually perform some internal checks to ensure that the received values or calls were performed
+correctly and they are capable of failing a test from within the implementation. As I mentioned,
+these definitions can differ depending on who you ask and they're often used interchangeably with each
+other. We'll be mostly using dummies and stubs to simulate I squared C calls to get our TMP 102 driver
+to work without needing real hardware. By building tests around your functional code, you can easily
+automate tests to verify your work every time you make updates. This is a crucial step in the continuous
+integration process, which is half of the continuous integration and continuous delivery or CICD pipeline.
+Even in the embedded world, setting up such a pipeline can save you a lot of headaches by catching bugs early.
+I recommend checking out my four part intro to CICD series to learn more about this pipeline.
+For now, we're just going to stick with writing simple unit tests so you can see how that works in rust.
+Let's add some tests to our TMP 102 driver library. So we're going to close down apps. Let's open up libraries,
+go into our driver directory. We should not need to change anything in cargo dot toml because we don't need any
+dependencies because cargo by default comes with a test framework. This is essentially built into the language or all
+the things the language gives us when we install it. We will need to open up lib dot rs and we're going to
+scroll to the bottom to start writing our tests. Let's start by creating this attribute CFG test.
+This decorates the code directly under it. So this entire tests module CFG basically says to only compile
+the code if this particular configuration is set. In this case, we're setting the configuration to test,
+which cargo knows how to do that on the back end. This is a special test configuration that gets
+set whenever we call cargo test that you will see in a moment when we call that from the command line.
+Next, we need to import all of the structs and functions that we wrote as part of this driver.
+So we do that with use super, which refers to the module one above. So that's all of this code
+we wrote in the previous episode that imports all of it so we can use it in our tests. Next,
+we need to explicitly link to the standard library because we're going to be using the standard library
+as our tests, at least here, will be run on a computer with an operating system, even though in
+our code we said no standards where code can run with no standard, especially for embedded systems.
+But our tests, we will need the standard library to run some of them. This is useful for things like
+including strings and vectors and so forth. Next, we'll need a few things from the i2c library in
+embedded hell. We're going to need the custom error definitions in there. We're going to alias error
+as i2c error so we can reference that appropriately to avoid confusing it with other types of error.
+We'll need error kind and operation. If we highlight over it, you can get some information.
+Error kind is an enum. It's a common set of i2c operation errors. And then we have operation,
+another enum. This holds read and write operations. We will need these for defining our stubs
+that mimic i2c reads and writes. Because the plan is that we're going to replace the i2c bus,
+because we're trying to run these tests on a real operating system with some sort of stub or mockup
+that returns known values when we read and write to something here. So we're going to pass in our
+mockup of an i2c bus so that these functions can run in our library. And we will return some constant
+values when we call things like read write so that our library will still work even though there's no real
+i2c bus and it's not talking to a real temperature sensor. This allows us to create some basic tests
+to test our library. Now we actually need to create this i2c stub to mockup or fake our calls to an i2c
+device. This will be a struct. This should be a public facing struct because we'll need to call it in our
+tests. We will have some response data that it returns back. This is just going to be two bytes. This will be
+fake temperature data. And then I'm going to put a call count here. We're not really going to use it.
+This should give you an idea of how to store things like the number of times something was called if you
+want to get some metrics from it. But it's not really one of the tests we're going to be performing.
+Next we will create some methods to go along with this i2c stub that we're creating. The first is new,
+which just creates an instance of the stub struct. So in it we'll fill out some response data with just
+default to zeros. We'll start the call count at zero. Now let's create a method that allows us to
+change the temperature in that response data field in our stub struct. So we can set it to a particular
+temperature given by a floating point value. Note that we will need a mutable reference to self,
+the struct itself. And we're going to do the reverse calculation that we did in our library,
+where we're going to take the floating point value in degrees Celsius. We're going to divide that by
+0.0625, cast that as a signed 16-bit integer, shift it over to the left by four bits. Then we're going
+to assign the first element in response data to the temperature raw shifted over by eight bits,
+and then cast that as an unsigned eight bit integer. So that's that most significant byte in temp raw.
+And then we will assign to the second element of response data temp raw bitwise and with hex ff. So
+that's that least significant byte. And then cast that as an eight bit unsigned integer. So now we can
+modify the temperature that's being held by the quote unquote temperature sensor, the stub we're creating.
+And so we can get that data back and verify that the temperatures are equal.
+And it looks like I want this to be part of the implementation here.
+So let's indent this under the I2C stub implementation and then actually close out
+those curly braces. Great. Now we have our stub implementation.
+Embedded how requires a concrete type for the I2C implementation. This usually comes from the chip
+specific how like our RP 23 5 X how library, but because we're not using that here, we need to
+define an actual error type, a concrete error type that gets passed in. We'll also use the
+derive attribute here so that the compiler automatically fills out the debug and clone
+implementation for our struct. That way we don't have to create custom versions of those.
+So we can print out debugging information and we can do a deep copy or a clone of the information in this
+struct. We need to implement a function known as kind for the I2C error trait. So we will say implement
+I2C error for dummy error. We will define the function kind. This takes in a reference to self. So that's
+struct and it returns this error kind where we just take error kind and return other.
+This is a real basic return. So if we go look at error that we're importing from I2C that we will
+need to use, we go to the definition. You can see this is a trait and this says that this function
+must be implemented for anything implementing the error trait, which we are doing with our dummy error
+error kind. If we go to that definition is an enum that allows you to select the kind of error that has
+occurred. So there might be a bus error, attribution loss, no acknowledge, say from the device,
+a receive buffer overrun, and then a catch all for everything else. We're just going to return other as
+the type and call that good enough for our implementation of kind here. We need to create
+something known as an associated type here. We're going to use our dummy error type for self-error
+when we're talking about the I squared C stub that we're going to implement. An associated type is a
+bit of an advanced concept that we're not going to go into in detail in this series. But essentially what
+we're doing is defining a placeholder type inside of a trait. The embedded HAL I2C trait forces us to
+return a specific error type usually defined by the chip HAL like rp 23 5x HAL. We need to create a
+substitute here so that we can actually return our dummy error instead. This is kind of like an alias,
+but it's known as an associated type where we're saying the type of error in this implementation that
+we're creating should actually be dummy error, which is what we've defined up here.
+Now we're going to create our stub implementation of the basic I2C read and write functions.
+So embedded HAL I2C I2C, if we go to the definition here, this is a trait, which means this is an
+interface and we have to implement all of the functions listed in here. And it's actually not that many.
+We have read, write, write read and transaction. And the reality is we only really need write read
+because that's all we're really using in our code. The rest of these can just return okay with nothing
+in it. So that's not so bad for our stub implementation. The read function is going to take in the following
+parameters. It will need a mutable reference to the struct itself. It will need an eight bit unsigned integer
+for the address and a mutable reference to an array of eight bit unsigned integers for the read buffer.
+It's going to return a result. The okay of that result is just going to be nothing.
+This open and close parentheses with nothing in it is known as the unit type in rust.
+It represents no meaningful value or nothing. I know I said earlier in a previous episode
+that rust doesn't have null or nothing. This is kind of like a nothing but it is still its own type.
+You can think of it like a tuple that has nothing in it, just a holder. So result, we have a generic.
+The okay is the unit type and then we will return self error which we defined up above to be this dummy
+error. So that's how we can get this self error even though the concrete type of error is not actually
+filled out by a how because we haven't imported any hows. If you're curious where we're getting this
+signature, if you go to the
+i2c trait, you can find this exact signature given here.
+Also note that we're putting underscores here which tells the compiler we're not actually using
+the parameters even if anything was passed in. Otherwise, you'll get a warning if you don't include
+this by convention. Right just like read will always return okay since we're not really going to be
+using it. We will need a mutable reference to self and 8-bit unsigned integer for the address
+and an immutable reference to an 8-bit unsigned integer array. That will be our right buffer.
+Once again underscores meaning we're not going to do anything with those parameters.
+We will return a result. The okay value will contain the unit type and the error will just be self error
+even if we're not ever going to return an error from this. And for the actual implementation of this,
+we will just return okay with the unit type. Next, we're going to implement the right read method.
+This is the only function we're using in our actual library. So it's the only one we really care about
+implementing to test. It will be pretty simple. We're just going to fill out the read buffer with
+the response data that's stored in the struct and we're going to return okay. It will need a
+mutable reference to self. It will need both address and right again underscores because we're not going
+to be using those and it will need a read buffer which is a mutable reference to an 8-bit unsigned
+integer array. Once again, it's going to return a result. The okay value will be just the unit type
+and error will be self error even if we don't actually use it. We're going to return a canned
+response. In this case, we're going to fill out that read buffer where we're going to call this built
+in copy from slice function. We'll give it a reference to the response data stored in the struct
+and it will do a deep copy of that response data to the read buffer. This is also a good place to
+demonstrate that we can just increment our call counter here by one if you want to look at that
+to see, for example, how many times this was called. We won't do anything with that here though.
+There. And then as we've been doing before, we'll just return okay with the unit type
+and we're actually going to be filling out the read buffer with a canned response even though we are
+also returning a canned response. We also need to fill out the transaction details. This will be
+another canned response of okay with the unit type. This signature is given to us by the I2C
+trait and the parameters are a mutable reference to itself or the struct. We can pass in an address
+which is an unsigned 8-bit integer and then a list of operations. This is an array. It's a mutable
+reference to an array and this is of type operation and it is requiring a lifetime annotation here.
+So tick underscore is what's known as an anonymous lifetime or a placeholder. This basically says
+we're not giving it a name. We don't really plan to do much with it and just let the compiler figure
+out what to do with it. So we do need an explicit lifetime annotation here, but since we're not really
+using it, we're just going to give it some placeholder name. All we're going to do at this
+point is return okay because we're not going to be using transaction that concludes the implementation
+of our stub I2C bus with supposedly an attached temperature sensor. In fact, we can just call
+right read with this stub implementation and it will always give us the data in response data. You are
+welcome to flesh this out to make it more like a fake or a fully functioning emulated sensor if you'd like
+where you can check the actual device address. You can check the register addresses and you can even
+give it functionality to mimic things like triggers if you really want to. But we're going to leave this
+as being very basic for now so we can demonstrate how to write unit tests. But this should give you a
+starting point to writing something like a stub where you need to emulate some sort of operation or
+functionality, especially when you're dealing with embedded systems and you want to be able to test on
+a computer without connecting up real hardware or doing something like hardware in the loop. So unit
+tests are usually just basic tests with some example data to demonstrate and ensure functionality.
+The first one we want to do is just make sure we can create a new driver. So now we're going to be
+calling code in our actual library but relying on connecting up to this stub I2C implementation that we just
+created. So our first test and notice that we are using this test attribute. This tells cargo test when
+we run it to treat this as one of the unit tests. It registers these tests and it will know how many we
+have registered and run the tests appropriately. So rather than instantiating an I squared C bus like we did in
+previous episodes using a real hal and real hardware, we're going to instantiate our I2C stub that we just created by
+calling this new function and that just gives us a real basic stub implementation of an I2C bus. Then we're
+going to instantiate our driver. So now we call TMP 102 because that's been brought into scope with that use super
+asterisk line. We will pass in this I2C stub we just instantiated and we will set the address to ground. Not that it
+particularly matters. This should be address hex 48 but as you can see we never check that in our code above.
+Rust comes built in with a bunch of these assert macros. They are very useful for testing data or
+testing information or functions. Essentially it makes sure that the internal contents are true or
+evaluate to true. Otherwise it will crash your whole program and run the panic handler. So you're welcome to use
+them in your regular programs. Just know that you might end up panicking if something fails. They are
+very useful in this test framework because rather than completely crashing your program the test framework
+will catch the panic and simply just mark the test as failure before moving on to the next test. So you're
+welcome to use assert here where you can define your own equality statements or test statements like
+equals equals or greater than or less than but they're so common that rust also gives us this assert
+equal macro which we'll use here. So this might be one of our tests where we instantiate it with this
+default address assuming that the a zero pin is connected to ground that should set the internal
+address in the driver to hex four eight. So we can just call this as you eight function from address
+to make sure that the address is indeed hex four eight because that's what we expect it to be in the
+hardware. Let's write another unit test. In this case we will actually attempt to read the temperature
+using our stub driver and notice that I'm decorating new functions here. The test framework looks at
+these functions and will automatically run them on the back end anything that's marked with this test
+attribute. As we did earlier we're going to instantiate a new i2c stub driver and we're going to create
+a mutable version of that because we're going to actually change the internal values of it by setting the
+temperature. Let's set the temperature using the set temperature method to 25 degrees celsius. If we
+scroll up you can see set temperature here and that should set the internal response data of that
+struct. That's why we need a mutable version of this stub driver and actually this should be i2c stub.
+There we go much better. As we did earlier with the first test we're going to instantiate our driver
+pass in that i2c stub struct and let's also set the device address to hex four eight by sending it address
+ground. All right let's read the temperature. We will call driver which is our actual library under test
+say read temperature c and then we'll just unwrap that result we get from it and set it to temp.
+As you can probably guess we want to assert that this temperature we read using our driver
+that gets read from that i2c stub should be the same as the temperature we set on that fake device.
+So 25 degrees celsius. Let's save this. If you're in apps go up one go to libraries. Let's go into our
+tmp 102 driver. Make sure you've saved your work and cargo makes this really easy. So cargo test will run
+our tests after building it looks like we've got an error here and i should take a hint sometimes from
+intellisense when it's yelling at me it looks like i forgot to actually return self i forgot to do the
+thing i promised to do which is create a new struct fill out the data and then make sure that gets returned
+all right let's try that cargo test so it looks like we passed but we do have a warning here at part
+88 and i don't ever remember adding this so my guess is that intellisense filled it out when i was just
+mashing enter and tab so let's save that this is what your test should look like we're going to start
+with use super and we'll leave it at that so cargo test this runs feel free to read your results you
+can see it running here and then here are your actual test results so two of them passed there's also doc
+tests which we won't get into this is for documentation but feel free to dig into that if you would like
+if you want to see what it looks like when one of these fails all we have to do is change and all
+let's fail the first one we'll change the address because we know that's not right so run this again
+sure enough you see test results one passed and one failed let's change this back to hex 48 save that
+and if you'd like to run one test at a time you can actually refer to them by their function name
+so i can say cargo test give it the function name
+let that run and sure enough it just runs one test which is this test temperature read this one right
+here what's interesting is that you don't have to give it the exact name this is a pattern matching
+parameter so we could give it for example anything in the strings of the function name and the test
+framework will find it so we could say new and it'll just run this test for us
+it finds test new driver because new is the pattern that matched here
+or we could say test and it will run both of them because test is a substring in both of the function
+names automated tests play an important role in developing many professional libraries and
+applications and i hope this helps you get started writing such tests in rust in the next episode we'll
+look at interrupts which serve an important role in many embedded projects see you then
+see you then

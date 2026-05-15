@@ -1,0 +1,532 @@
+If you are looking to do some multitasking in embedded rust, there's two popular frameworks I recommend checking out.
+The first is embassy, which is an asynchronous framework with some nice abstraction layers and libraries.
+The second is the real-time interrupt driven concurrency or Arctic framework.
+This is closer to a traditional preemptive real-time operating system like free RTOS.
+However, it lacks some of the abstraction layers and libraries that make embassy easy to use for complex projects.
+Embassy also seems to be more popular right now, so that's what we'll focus on in this episode.
+In this final episode, we'll shift gears to talk about the embassy framework.
+We'll use many of the concepts we covered in previous episodes to create a simple demo application.
+While we've already built a simple blinking LED and serial USB logging application, we're going to recreate it in a totally different way using asynchronous functions.
+Embassy does an amazing job of abstracting many of the gritty details for us, and it makes toggling pins and working with USB much easier.
+What took me a bit to wrap my head around at first was the fact that embassy is a collection of frameworks and libraries.
+You pick and choose which ones you want to work with for your project.
+We can replace our bare metal hardware abstraction layer using one of the supported embassy HALs,
+like the ones for NRF chips, RP for Raspberry Pi chips, and the STM32 family.
+For concurrency, you usually want to include the core executor and futures.
+You'll see how each of these comes into play in the demo.
+For timers and duration, you'll want embassy time.
+There's also a synchronization library for things like mutexes and signals that you'll likely need.
+And then you have optional libraries that you can add, like a whole USB stack as well as a network stack.
+There are other libraries I didn't mention, but these are the important ones I recommend checking out to get started.
+For this demo, you'll just need a button connected to GPIO 14 and an LED connected to GPIO 15.
+Don't forget that 220 ohm resistor for the LED.
+Let's jump into some code, shall we?
+To start, let's create a new project.
+So in workspace apps, say cargo new.
+We'll call it embassy demo dash dash bin for binary.
+You can leave that off if you want.
+That's optional.
+Then dash dash VCS for version control system and none.
+In our files, we have embassy demo that has been created.
+We're going to create a new folder in there.
+We're going to name this dot cargo so that the cargo build system knows where to look.
+And then we'll say config dot tunnel.
+In the build section, we'll say target equals thumb V8M dot main dash none dash EABIHF.
+This will enable the floating point unit for us.
+Then in that target section, so target dot thumb V8 and so forth, we're going to set some flags.
+The first is this dash C target CPU.
+It's going to be a Cortex M33.
+This should look very familiar to the config dot tunnel files we have created for other demos like the blinky demo.
+In fact, you probably can just copy and paste that.
+We're going to use the other link or directives that we've seen before.
+So dash T link dot X and dash dash and magic.
+Notice that we are leaving out any of the D format and debug probe options here.
+That's because we're going to be flashing directly using the UF two system.
+I won't be using the debug probe in this episode.
+We're going to use the code just to demonstrate how you can use embassy to create something without needing that extra hardware.
+Let's file and save.
+Now we're going to open up cargo dot tunnel.
+Embassy is made up of different parts and libraries.
+Feel free to go to embassy dot dev slash book.
+And then if we go to this system description here, which is about halfway down.
+About halfway down.
+Here it is.
+Here's the system description section.
+This lists the different features that you can include.
+So feel free to read through these.
+So some of them are, for example, the executor.
+This is kind of the main thing that runs in order to assign tasks to run.
+We can enable things like interrupts.
+We can add time bootloader and so forth.
+So keep these features in mind and feel free to read through the specifics there.
+If we go to, for example, the embassy executor crate, you can find some information on the different features you can enable here.
+So for example, within the embassy executor, we will need this thread.
+We won't use the other, but we will specify an architecture for our cortex M.
+Okay, so back to cargo dot tunnel.
+Make sure that this name is embassy dash demo.
+Leave the rest of this alone.
+And let's list out our dependencies within embassy executor.
+We'll take version point nine point O and then we will enable some of those features that we saw.
+So the first one is that we're targeting a cortex M architecture.
+And then the other feature we'll need is this executor thread.
+Embassy futures is a separate crate that gives us some async utilities that we will need.
+Embassy time gives us access to things like timers and delays.
+So rather than implementing those separately from, say, the actual hardware that we've been doing in previous episodes,
+embassy actually has this crate that wraps up and abstracts some of those timers for us.
+It just makes it easier to use, especially with things like async functionality.
+Embassy RP replaces our how that we've been using.
+So we're not going to use that RP 23 five X how anymore.
+We're going to be using this built in how that comes with embassy.
+Notice that these are features you can actually mix and match.
+So you could, for example, use this embassy RP, but not the executor futures or time and just rely on the hell if you don't need async functionality.
+While it might be a little confusing at first to set up, it's one of the things that makes embassy nice to use.
+You can actually just pick the features you need in embassy RP.
+We will need the following features.
+We'll need time driver.
+This gives us access to the drivers for hardware timers.
+We'll need a critical section implementation.
+This allows us to disable interrupts for things like atomic operations and then the RP two, three, five X a.
+This is support for the dash a variant.
+That's the exact chip on the Pico two as opposed to say the B variant.
+So make sure you are picking the correct variant.
+If you're working with an RP 2350, that's not say the one on the Pico two.
+Next, we will need embassy USB.
+This is USB drivers embassy USB logger.
+This implements the communication device class or USB CDC driver.
+The embassy USB logger requires this log crate to be installed.
+This is a very simple logging framework.
+You'll either need to provide your own underlying layer, but but the reality I see is that the USB logger just works well enough with this.
+Next, we'll need the underlying cortex M and cortex M RT for runtime.
+These we saw in our previous examples and they are still necessary here.
+These are just the super underlying low level drivers that we need.
+Finally, we will keep the panic probe crate that we saw in the previous episode.
+This just implements the panic handler for us.
+So we don't have to put it in our code manually for our debug profile or profile.
+Dev.
+I'm going to keep code gen units to one so that everything compiles together.
+Even if compilation is a little slower.
+If you want to speed up that loop and compile using multiple processes, feel free to increase this.
+Then for our release profile, we're going to set the optimization level to S for size.
+Keep LTO to true set code gen units to one and strip to true.
+These are common configurations that we saw in a previous episode to keep the release profile as small as possible.
+Should we actually want to build something for release?
+All right, let's save that.
+Now we can open up our source main dot RS.
+We will get rid of that because we're going to start fresh as we've been doing.
+We will declare that we are not using standard and we are not going to be using the regular main.
+These are common attributes in embedded code and embassy is no different.
+All right, we're going to import some things we'll need from the embassy house.
+So that's embassy RP.
+The first one we'll need is buying to interrupts than GPIO from peripherals.
+We'll need USB so we can talk out over USB and then from within the USB namespace, give us driver and interrupt handler.
+Let's save this.
+If you find that IntelliSense isn't working for this new project, I usually find going control P greater than symbol restart the server and give it a minute to cash everything.
+After that loads, you should be able to go to definition for the various imports and take a look at the source code.
+And there we go.
+Now we're actually getting some warnings here.
+It looks like IntelliSense is working from the main executor in embassy.
+We'll need spawner so that we can actually spawn.
+I'm going to call it threads, but it's more like tasks, asynchronous tasks from embassy futures.
+We will need join and join array.
+This is like waiting for tasks to complete and it allows us to do nothing in our main thread while other tasks take care of things.
+From embassy time, we'll need a timer.
+As we saw in the previous episode, we just need to import panic probe.
+We'll say as underscore so we're not actually using it here.
+That's just a placeholder variable.
+By importing it, it's just going to include a panic routine that we don't have to implement here in our code for us.
+This keeps our main program quite neat.
+Embassy has this unique way to bind interrupt handlers.
+It has this macro called bind interrupts.
+So exclamation point for the macro.
+Then we have this struct IRQs and then we use this unique syntax where we're doing the equal sign greater than to create an arrow,
+much like you've seen in the match statements.
+So this is not really normal rust, but in here we're going to say USB control IRQ.
+So that's our interrupt line and we're going to bind the handler to it.
+This is interrupt handler and then we give it the type USB.
+So interrupt handler is a generic.
+We give it type USB and that's how we bind interrupts in embassy to create an asynchronous task.
+Think of it like a thread, but it needs to yield manually.
+We have to decorate a function with this embassy executor task.
+This turns it into a task that runs for us and we have to give it to this async keyword before we define the function.
+This is what makes it an asynchronous function.
+So the function name will be logger task and it takes a parameter driver that is of type driver.
+This driver is a generic and it first needs a lifetime annotation.
+And as we talked about in the lifetimes episode, this will be a static lifetime because it's going to exist for the entirety of the program.
+So we give it tick static comma and then we give it the type.
+So the type here is USB embassy knows what that type is and handles the details for us.
+But we do need to manually create this task handler so that it knows how to run the USB program on the backside in the embassy USB logger crate.
+There is this run macro.
+We're going to give it 1024 log level filter info.
+So if you want to change that debugging level, you can use one of the available levels in level filter.
+So like info debug error and then we have to pass in the driver that was given to us from the parameter.
+So if we go to run, let's go to definition.
+You can see where that macro is defined here.
+That X is that first 1024.
+Let's go to USB logger and we can't dive in any further than that.
+If we look up the documentation on USB logger in the embassy USB logger crate, as far as I can tell, this is the size of the buffer.
+So you don't want strings to be over that when you are sending stuff out to be logged.
+All right, back to our code and then level filter here.
+This should be an enum and here are your options off error warrant info debug and trace just like the levels we saw earlier when we were using.
+The D format logger.
+All right, let's go back to our code.
+Okay, so next we're going to have an asynchronous function that also loops.
+So this is going to function similar to a task, but it's going to actually be run in one task and it's going to break out and do this loop on its own.
+So we're going to see the difference between a task and official embassy executor task that we saw above to handle USB logging and having our main task.
+Just run a bunch of asynchronous functions that individually kind of also run like tasks.
+It's just not decorated as a task.
+So in here we're going to accept a mutable pin.
+This is not a reference, so it takes ownership and notice that I use the async keyword here because this is an asynchronous function and that pin is going to be of type GPIO input and then a type.
+That tick underscore is a placeholder type more specifically.
+It's a lifetime annotation placeholder.
+We don't care what this is called.
+We're not returning anything here, so it doesn't really matter, but the compiler absolutely needs this type to be filled up for us and then we have ID and then a string slice.
+So we could have multiple versions of this button and we could print out different strings if we wanted to.
+This is just demonstrating how to pass in other information to these asynchronous functions.
+Should you want to then for pin?
+We're going to have this weight for low.
+As you can see, embassy has its own functions for dealing with pins and then we have dot a weight dot a weight means to wait for a future to complete.
+This weight for low function gives us a future and the a weight says block.
+Don't do anything while that future has not been filled out.
+So wait for low waits for the pin to be pressed.
+Once it's pressed, the future is filled out.
+A weight completes and execution can continue.
+A weight has a special feature where while it's waiting for that future to complete, it yields execution to the processor for it to run other asynchronous functions.
+So this is how we're accomplishing multitasking using asynchronous functions rather than full multi threading.
+Note that your functions need to play nice and actually do things like yield or call a weight waiting for some event to occur to allow the processor to run.
+Otherwise, if you just loop, it will hog the processor forever and there's no preemption or preemptive multitasking to say, hey, this other function needs to run.
+And there's no schedule or to say, let some other function run when that occurs.
+If we look at this input function that I mentioned, this is a generic placeholder.
+Let's go to the definition here.
+You can see that it absolutely expects this lifetime annotation here.
+It doesn't matter what we call it.
+We just have to give it something so that the compiler can figure out what to do with it.
+To log stuff to the console over USB, we're going to call into the log namespace info macro.
+And that gives us a debug level.
+So you could also call error or debug here.
+And we're going to say button some placeholder pressed and then give it the ID.
+So that's the string we passed in just to demonstrate how we can use strings being passed into these asynchronous functions.
+This log namespace is not something we included, but it seems to be included by default whenever we add log as a dependency.
+So we have access to that namespace.
+We can just say log colon colon and give it what we want to print out that logging level.
+We're going to perform a very simple debouncing mechanism here.
+So you don't get multiple messages printed to the console.
+After the pin goes low from pressing the button, this gets executed.
+And then we're going to wait for 200 milliseconds.
+So this is how you can accomplish a very simple weight or delay.
+We can use our timer library and say after millis 200.
+We go to that definition.
+This should create something like a future for us.
+And then a weight weights for that future to be completed.
+It looks like it just returns a version of itself when it's done, but we don't need to do anything with that.
+So once the future is completed, that should happen in exactly 200 milliseconds.
+And then we're just going to wait for the button to go high again.
+You can obviously beat this by pressing the button too long or pressing it too quickly.
+So this is a very simple way to debounce.
+If you'd like to challenge yourself, try creating a more complex debounce to handle true debouncing.
+But this is just a simple way to say, hey, once it's pressed, wait 200 milliseconds, then wait for the button to go high again.
+At which point it resets and goes to the top of this loop and waits for that low to create our main function.
+Because remember, we're not using a standard main.
+We're going to be using the embassy executor main.
+This sets up some things on the back end, like allowing us to do asynchronous tasks.
+And in this case, main itself needs to be asynchronous.
+And what we get passed in is a spawner that allows us to do things like spawn full asynchronous tasks.
+The first thing we need to do is initialize the hell.
+This is a bit of boilerplate code that just needs to get called.
+So we're going to say let P so we get access to a handle to, I guess, our how then we're going to say embassy RP.
+That is our how then in it.
+And then from default, we're just going to give it the default config that comes from embassy RP.
+This just gives us all the defaults for initialization, which is fine.
+We'll keep that then to initialize our USB stack.
+We're going to say let we're going to have an immutable struct here.
+That's USB driver.
+We're going to say driver and new from that.
+How we're going to pass in the access to that USB bus.
+And then we're going to also pass in IR cues for our interrupts.
+If you're curious where this gets defined, that is actually defined by us when we say struck IR cues.
+So we could likely give it another name here.
+And we define our mappings of interrupt lines to the handlers.
+Remember that embassy is going to handle a lot of the USB communication for us.
+We just need to give it this task along with this run macro in order to log stuff out USB.
+And we also need to give it a bus here.
+So if we highlight over new, you can see it's asking for a particular peripheral.
+This is the USB bus.
+And then the bindings for the interrupts to the interrupt handlers, which was created by that macro.
+Then we're going to spawn a new task and we're going to tell it which task we want to spawn.
+So that's the logger task.
+And we will pass in logger task our USB driver.
+So let's go to where we define logger task.
+So you could give this function another name.
+Here is where it's asking for that driver that we passed in.
+So we give it that USB driver and now this macro knows what to do with this.
+So this is really just connecting some things on the back end, connecting a driver to the logger.
+And then embassy handles the rest of the communication for us.
+So then we can use macros like log info and that goes out over USB.
+So it's mostly a bunch of boilerplate to connect things on the back end rather than writing our own drivers.
+Thankfully, it's fairly straightforward to do.
+And now we have a USB logger in embassy to create a new pin.
+All we need to do is have a variable that holds that struck.
+We can make it immutable right now.
+We're going to say GPIO input.
+That's from the embassy hal or embassy RP.
+We're going to set it to input and then we're going to say new.
+So this is creating a new input GPIO.
+We're going to give it the pin and that's a value that's defined within the embassy RP handle
+that we got after initializing it.
+And then we're going to give it some option here.
+So we're going to say enable that pull up.
+So GPIO pull and then up.
+And if we go to pin 14 definition, you can see that this is a list of peripherals that we have access to.
+So these work as think constants that you can just say, hey, use a particular pin that's available.
+And you can see if we're using the B variant, there are extra pins available.
+All right, back to our code here.
+Then in order to run our monitor button function, that async function we wrote, we're going to say let button future equals monitor button.
+We're going to pass in the pin and we're going to pass in that string slice.
+So just pin 14, you can put whatever string you'd like here.
+Let's go back to our monitor button asynchronous function that we wrote.
+Something to note here is that pin is passed in as mutable, which means that we can still mutate the internals of pin, which might happen with wait for low.
+But especially if you're going to change the state of an pin, say for example, it's an output pin.
+So we do need to declare this as mutable, even though this is immutable.
+So we have an immutable handle in our main.
+It gets passed in.
+So ownership is passed to monitor button and it becomes mutable inside of this.
+So that is an interesting use of the mutable keyword in rust when you're passing structs or passing handles around in functions.
+Once we call that function, it immediately starts to run because it's asynchronous.
+The threat of execution will only be given up once it hits some sort of yield like an a weight or a weight.
+I suppose keyword after one of the functions in monitor button, we can have our main thread here or main task.
+Wait for that to finish because it's a forever loop.
+It won't ever finish unless for example, it hits the panic handler, in which case we have bigger problems.
+But we can use this join array function, pass it in a list or an array of futures that we have created from our asynchronous functions and we will await those to all complete.
+So for example, you could list more futures out here and so on.
+And this function won't return until all of those have completed.
+So now we have created event based programming where we set everything up in a single thread of execution and we just wait for everything else to happen, which is happening in these asynchronous functions.
+These will never return, but you could continue to do things in your main function here, like have a loop if you wanted to.
+Just make sure you yield execution with a weight every now and then or a weight.
+I know I'm saying that I know I'm probably saying a weight incorrectly, but so be it.
+Let's go into our embassy demo.
+We're going to say cargo build.
+Hopefully that builds without an error.
+It should download all of the necessary dependencies.
+Notice that we have quite a few more than when we were doing this with bare metal because embassy also has its own underlying dependencies.
+Looks like we have an error and we forgot memory dot X.
+So let's go into Blinky.
+This memory layout should be the exact same because we are targeting the same microcontroller.
+Let's copy that and we're going to paste that in our embassy demo.
+Let's try building again.
+Sure enough, it finished.
+Let's call cargo size.
+Remember, this is going to contain a lot of debug information.
+Sure enough, that is a hundred and forty eight kilobytes.
+Oh boy.
+Yeah, if you're coming from the microcontroller world, that is a lot to take up in flash memory.
+Luckily, our Pico 2 has a few megabytes of flash, so this will work no problem and it's fine for debugging.
+You're welcome to go into cargo dot tumble and update your development profile or your debug profile with something else to optimize for size.
+Now, let's see what happens when we do optimize for size and we strip away a lot of the debugging information.
+We can say cargo size release.
+And let that build.
+As you can see, we stripped away quite a lot.
+About 28 K is really not that bad considering all that embassy brings.
+It's not a true full real time operating system.
+It gives us some concurrency options and you saw how easy it was to bring in a USB stack.
+Do USB logging and 28 K is not that bad for all of that.
+Now let's convert the elf file to UF two using Pico tool.
+So we'll say Pico tool.
+You have to convert.
+Give it the location of debug embassy demo.
+That's the elf file.
+Then say dash T elf to tell it the type of file for input, which is elf and then dump it all into firmware dot UF two.
+With that, I'm going to hold boot select on my Pico two.
+I'm going to plug it into my computer on your host machine.
+Go into workspace apps.
+We've been working with embassy demo.
+Find the firmware dot UF two.
+Copy that.
+Go into the RP 2350 drive that got enumerated.
+Go ahead and paste that.
+Once that's done, it should reset.
+Bring up your favorite terminal program.
+I'll use putty.
+Let's go to serial.
+Give it the location of the com port or your device.
+If you're on Linux or Mac OS, give it a speed of one one five 200.
+Looks like that did not come up for me.
+So in device manager, I need com five.
+That's interesting that embassy, I guess, is using a different V ID and P ID.
+So windows treats this as a different com port.
+So definitely double check the device file or your com port when you're using this embassy demo over the bare metal examples.
+So let's try.
+Com five.
+Looks like we are connected and I'm going to press the button.
+Sure enough, we have button 14 pressed.
+That is the message that is printing out whenever we press that button from that asynchronous function.
+And it should be mostly debounced for us.
+It's good enough.
+If I try pressing it too fast, it actually misses a few.
+So if you want to challenge yourself, try to get a better debounce algorithm working.
+But this is good enough for our demo.
+Now that we're done, we can close this.
+And we can go back to our code.
+Now let's add a separate blinking LED task so you can see how to do this.
+And it's not just some boilerplate for the USB driver.
+The easiest way to do this that I might recommend is actually creating another asynchronous function like you did here.
+Create an LED pin call the asynchronous function set it to a future and then add that future to your array here.
+Ideally, both functions should call a weight or a weight enough that it yields so that both tasks can actually execute.
+For demo purposes, we're going to create a full embassy executor task like we did here just so you can see how that works.
+It adds some complexity, but it allows you to scale by adding tasks similar to adding threads in something like a real-time operating system.
+Keep in mind that embassy is designed around no standard or just the core library.
+And it does not rely on any heap allocations on the backside.
+We saw mutexes in a previous episode that acts as a lock or a key to enable only access to a critical section or access to a piece of data.
+Embassy provides its own communication types in this embassy sync library.
+There are a number of synchronization primitives and structures that you can use.
+You can use a mutex, but we're going to use a signal, just kind of like a semaphore.
+This is essentially just one value where one task can signal to another task that it's ready to perform some action.
+To use embassy sync, we need to go to our dependencies list in cargo.toml.
+And under USB logger, we're going to add embassy sync and we're going to use version 0.7.2.
+Let's save that.
+Let's go to main.rs.
+I'm going to close down our memory.x files and then underneath our timer here, I'm going to import some embassy sync functionality.
+We will need to import this critical section raw mutex.
+This provides thread and interrupt safety.
+And here's where we're going to import that signal functionality.
+Under our last import, let's create our signal handle.
+We'll say static because this is a static variable that lives for the lifetime of the whole program.
+We'll give it the name signal blink.
+Notice I'm doing it in all capital letters to denote that this is a static lifetime variable.
+And then we'll say it's of type signal.
+And here's where we have to fill out the generic.
+We'll give it the type critical section raw mutex.
+If we highlight it, you can see it's a mutex that allows for borrowing across executors and interrupts.
+So that's how we can share data between executors and interrupts rather than having to do that mutex and ref cell we saw in the interrupt episode.
+And then we need to give it the actual signal type.
+In this case, it's a Boolean.
+So you could create something like a semaphore here where you had, say, a counter or an unsigned integer.
+We're just going to say this is of type bool because it's going to be a 0 or 1, true or false.
+But what's interesting is that we can actually set a default even though we're not in a threat of execution here.
+The compiler will handle creating this for us when we call new here.
+This looks like it's a function that should need to be in the threat of execution.
+So in main or in a function.
+But we can call it here because this sets the default for us at compile time.
+To enable that, let's go to the definition.
+Notice that this is a public facing const function.
+So this const keyword turns this into a constant function.
+And it means that this evaluates at compile time.
+So that's how we're able to do equals signal new here.
+Okay.
+The first thing we're going to do is we're going to update the monitor button.
+Let's create a very simple mutable state variable that is just a Boolean.
+And it's going to hold false initially.
+We're going to toggle that state.
+So from true to false or false to true.
+Our signal handler has some methods as you might expect.
+One of those is called signal.
+So that sends a signal to the other thread that's going to be monitoring the signal.
+And it will give it that state.
+Because that's the Boolean we can say on or off.
+So now every time we press the button, it will toggle the state on or off.
+Then just before our main function here, we're going to create our new task.
+We saw this attribute earlier, this decorator, embassy, executor, and task.
+It looks just like the one we created for the USB handler.
+So we'll create another asynchronous function.
+Give it a name.
+Give it some inputs.
+And then we'll do something in that task.
+And this decorator handles turning this into a full spawnable task.
+So again, asynchronous function.
+We'll give the function a name.
+Blink LED task.
+We will accept a mutable pin.
+That is going to be a struct.
+That is of type GPIO and output.
+And the output will have a static lifetime associated with it.
+And I need to correct my spelling of output here.
+We will need a mutable variable.
+We'll call it enabled to hold the value we get from the signal.
+So true or false.
+We're going to initially set it to false.
+We will set enabled to the output of signal blink dot try take.
+This is a non-blocking function.
+It tries to take the mutex or see if there's anything available in that signal.
+If there's not, it will return an option.
+If there was a signal, the sum in the option will contain the value that we put in the signal.
+In this case, it's that state we put.
+So true or false.
+If there is no signal, meaning we haven't pressed the button, it will return none.
+So to handle that, we could use a match statement or we could use this other function unwrap or in this case, if it is some, it will be unwrapped and whatever Boolean was in that signal.
+Some will be returned to enable.
+So if we press the button, state will be given as a signal.
+Some will be unwrapped here and whatever we put into state will get stored in enabled.
+If we haven't pushed the button, we'll get none.
+So we'll get this default value.
+So whatever enabled was previously enable just gets set to that.
+Let's go take a look at the embassy sync documentation.
+We're using a signal.
+This is a struct and it has some functions associated with it.
+We're using try take.
+As you can see, this is a non-blocking method.
+So it immediately returns.
+You are also welcome to use something like wait.
+This is a future that waits or yields execution to something else until the signal has occurred, in which case execution will come back complete weight and it will return whatever value was in the signal.
+So you're welcome to use any of these.
+We're going to be doing the non-blocking method so that we can have our led be blinking, but
+we can enable or disable the blinking based on pressing the button.
+So if enabled is set to true, so it's going to start with false.
+Once we press the button enabled, we get set to true.
+This will execute and we will set pin to high using this pin dot set high function.
+Regardless of the state of enabled, we're going to always set that pin low and then wait another 250 milliseconds before going back to the top of the loop and checking the signal again.
+Notice here, if your weight is too long, you have to wait for the entire cycle to complete before checking that signal.
+So this might not be the most efficient way to handle signals, but it is demonstrating how you can synchronize between threads.
+If you want to challenge yourself, try to find a way that if you were in the middle of a blink, the signal can actually turn off that blink immediately.
+So that might be a fun challenge, but for now let's keep things simple.
+So you can see how this synchronization works and how to write full tasks using the embassy executor.
+Let's save that.
+The last thing we need to do is actually spawn our task.
+The first thing we'll do is create a new output pin.
+So like we did with button pin, we'll say let led pin equals GPIO output new.
+We will assign that to pin 15.
+We get from that how that we initialized.
+Then we will say GPIO level low.
+So instead of a pull up or pull down, we can actually specify the initial state of that pin.
+So we're going to say initialize that pin to low.
+Then we're going to actually spawn the task much like we did for that USB handler.
+So we're going to say spawner dot spawn.
+We'll give it the task name.
+Blink led task.
+We'll pass in that pin that we just defined.
+And then we will say unwrap because that gives us a result and we should panic if something fails here.
+I'm going to go ahead and put let underscore in front of it so that we don't do anything with the return value from that.
+Once that task spins up, it is on its own.
+We don't need to wait for it with join array.
+So all we're going to do is let the main task wait while waiting for that button future to complete, which it never will.
+And the other tasks will do their own thing.
+So let's file save.
+Let's say cargo build.
+Then I'm just going to push up to get that Pico tool.
+You have to convert function again.
+We'll run that.
+And you'll notice I have a warning here.
+The let binding has a unit value, which means it does not care to actually be assigned to anything.
+Let's save that.
+Let's build again.
+That warning should go away.
+And we'll do the conversion once more.
+Once again, I'm going to hold boot select.
+Plug in my Pico to let's go into workspace apps.
+Embassy demo.
+Let's get our firmware dot UF two.
+We're going to copy that and we will paste it right here.
+Once that's done, it should automatically reboot.
+When I press the button, the LED starts to blink.
+When I press it again, the LED stops blinking.
+Okay, not the most impressive demo, but it should give you a good start for working with embassy.
+If you want to go further with rust, I recommend checking out the following resources.
+As you can probably guess, the rust book is likely the best resource for learning the language.
+The official rust reference guide is great if you need to look something up that's built into the language.
+For videos, the let's get rusty channel has some amazing tutorials, but it mostly focuses on the rust language in general as it's used on a computer with a full operating system.
+The rusty bits goes low level with rust, showing it used on embedded systems.
+Omar Hiari has a couple of great books I also recommend checking out if you'd like to try rust on the ESP 32.
+By this point, you should have enough development experience without the standard library in rust.
+So I'd go with the core library edition.
+That concludes our introduction to embedded rust video series.
+Thank you for sticking with it until the end.
+I hope it's given you a good start with this fascinating new language and maybe it's inspired you to make something fun with rust.
+If you do build something cool, tag us on social media.
+Good luck and as always, happy hacking.

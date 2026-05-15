@@ -1,3 +1,4 @@
 workspace/rustlings/
 target/
 *.uf2
+notes/transcripts/*.mp3

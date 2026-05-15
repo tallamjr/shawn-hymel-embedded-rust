@@ -1,0 +1,423 @@
+Rust has two powerful features that allow you to avoid rewriting lots of boilerplate code.
+The first is generics, which work much like templates in other languages like C++.
+They allow you to change the type of accepted values in function parameters,
+return types, and even structs and enums.
+The second is traits, which work like interfaces in other languages.
+They act as contracts to define shared behavior among types.
+We'll see both of these in action throughout the episode.
+We previously saw how to work with the I squared C driver to read from a temperature sensor.
+We're going to take a step back to examine generics and traits in Rust without touching embedded code.
+At the end of the episode, I'll show you an example of how you can use them to wrap up a simple LED driver.
+Let's get started.
+To start, let's create a new project in our apps directory.
+We'll give it the name generics example.
+We'll set it to binary for executable and version control system to none.
+Let's refresh our files here.
+We should see generics examples.
+Let's go to source and go into main.rs.
+We are not going to be looking at embedded code right now.
+This is just going to be basic Rust on our operating system.
+Let's start with an example of using generics for a function.
+Rust is a strongly typed language, which means we have to declare the types of all variables, parameters, and return values.
+As you have seen, yes, some of the types can be inferred by the compiler, but it's still a strongly typed language.
+Let's take a look at this function where we want to say swap two items in a pair, and we'll set this as a tuple.
+So our pair is going to be an I32 or signed integer 32 bits for our first item and a string slice.
+We're going to return the swapped version of that.
+So string slice and I32.
+And all we're going to do is take in those values and just return a tuple with the first item, the second item.
+Notice we are explicitly calling out the types here for the parameters and the return types.
+Let's create a quick demo where we have an original tuple.
+That's 42, hello.
+That's our string slice.
+We will call the swap function, pass in that tuple, get a tuple in return, and we will just print that out.
+So save this, go into our generics examples.
+Let's say cargo run.
+That should build it and print it out.
+Sure enough, the values have been swapped.
+Okay, this works great for this very explicit statically typed parameter set and return types.
+What happens if we want to use something else like a float or anything else?
+So if we try to put 4.3 in here, we'll try to run this.
+We get an error because 4.3 is not a string slice.
+That's a float.
+In fact, it's saying that right here.
+So how do we deal with this?
+Well, let's create a new function where we use generics instead.
+We've come across this syntax in previous episodes.
+We're going to use angle brackets to declare the generics.
+In this case, after the function name, we'll say that there are two generics we care about, so we declare them capital T and capital U.
+By convention, Rust uses single letters with capitals, generally starting at T for type, to denote your generics.
+This works much like templates if you're used to using those in something like C++.
+As we did before, we will declare our parameter, the single one here known as pair, and then we give it the types.
+Instead of, say, I32 and string slice, we're going to use T and U because those are the generics, the generic types that we just declared right after the function name.
+So now it accepts a tuple of type T and type U, and those can be pretty much any type, including things like structs and enums.
+We are also going to return a tuple with T and U, but remember we've swapped those values because that's what this function is doing, so it's now U, T.
+Let's save this after we have returned pair.1 and pair.0, and let's go ahead and run it again.
+Sure enough, the compiler figures out that T and U should be an integer and a float, and it handles that appropriately by assigning T and U to those specific types.
+With Rust Analyzer and IntelliSense working, we can press Ctrl and Alt to get the types.
+Sure enough, I32 and F64.
+Let's change this back to the hello string, or in this case, a string slice, and you can see that the types are automatically updated.
+The compiler infers those, and because we're using the generic, that updates to I32 and string slice as well, automatically when we compile.
+So let's save that, we'll run again, and sure enough, this works just fine.
+Something to keep in mind here as we're going forward is that the compiler performs something known as monomorphization.
+That is, as the compiler goes through, it sees that we are calling swap, and it needs to create a version of swap with I32 and a string slice for T and U,
+so it actually generates a new function with those concrete types.
+So if we use it again with an integer and float, later in the code, it would generate another one.
+So every time you use a version of a generic function with concrete types, the compiler actually generates code for each of those types.
+So right now we only generate one function, but if we had another one where we used a different set of types, another function would be generated on the back end.
+This is how you can run into some code bloat if you start using generics a lot and with different concrete types.
+Next, let's talk about traits.
+A trait is a contract.
+It defines what methods a type must implement should they implement that trait.
+This is similar to things like interfaces in other languages.
+To do this, we first define the trait, and then we will define the type in a moment, and then say we will implement that trait for that type.
+But to define the trait, we just say trait, give the trait a name, in this case, hello, with a capital letter by convention,
+and then say what function or functions need to be implemented in that trait.
+In this case, just one function.
+Say hello.
+We give it a signature.
+In this case, it will accept a reference to the type itself, so like a struct or an enum, and we won't have a return type here.
+Then we will define a type.
+In this case, it's just a custom struct named person, and it's more or less just a wrapper for this string, which we will say has the variable name name.
+Right now, the trait and the struct are not related to each other.
+Next, we will implement the trait for the type.
+We will do that with the keyword IMPL for implement.
+We're going to say hello.
+We're implementing a trait, and we're going to implement it for a type.
+This means that our type person, this struct person, must use the functions set forth in the trait.
+This is why you were seeing things in the documentation earlier that would say certain functions, like I squared C functions,
+are implemented for a particular type, like an I squared C bus.
+A lot of the HALs for embedded code implement various traits so that they all have the same function signatures, even if the definitions are different on the back end.
+That's how we can swap out, ideally, different HALs, and they should more or less function the same because they all implement the same traits.
+They all have the same interfaces.
+So to implement the function given by that trait, we have to use that exact same signature.
+So function, say hello.
+So instead of a semicolon, we'll put curly braces because we're implementing this function instead of just providing a declaration inside of a trait.
+All we're going to do in this function is just very simply print the name that's stored in the struct.
+Now, let's see this in action.
+So we're going to declare an instance of this struct.
+We'll say let me, that's the name, equal person, that's the struct.
+And we're going to define the only value in there, which is name.
+And we're going to give it my name string from Sean.
+Because we've implemented that definition, we can say me, which is the struct, dot say hello,
+which is going to call the function associated with that struct.
+Let's save this.
+And let's call cargo run.
+That should build.
+And sure enough, it says hello and give the name of the struct.
+All right, let's move on to trait bounds.
+Let's create a very simple function.
+We'll call it add.
+We'll give it the generic T.
+And we're going to say as long as A and B are the same type,
+let's go ahead and add those together and return whatever that sum is.
+Notice there's no semicolon here, which means this effectively returns the output of A plus B.
+All right, let's try to run this and see what happens.
+So we're going to call go run.
+And we get this error, cannot add T to T.
+Hmm, why is that?
+It's going to give us a hint what we should do here, but let's focus on what's going on here.
+As you can probably guess, some operations are not supported for all types.
+Because this is a generic, the compiler has to go, okay, this should work for things like strings.
+And the addition operator is not supported for things like strings, at least by default in Rust.
+So it gives us this error.
+I don't know what to do with this because I can't just add anything to anything.
+Other languages often solve this problem using something known as duck typing.
+For example, Python and JavaScript, they assume that the types implement the required functions, and they just try it.
+If it looks like a duck, quacks like a duck, probably it's a duck.
+So these types of generics will often just work, or you don't have to define the generics because it's a weakly typed language,
+and it'll just accept any parameter values, and it just attempts to perform this operation.
+If it fails, it actually fails in runtime and throws an error.
+C++ uses a version of compile time duck typing where it generates an error only when you try to instantiate the template with an incompatible type.
+But in Rust, we have to be explicit about our types and what operations those support.
+So we can bound where our add function can be used and on which types specifically.
+Let's make a note about what causes the error here.
+And we're going to recreate our function.
+We're going to add a trait bound.
+Trait bounds are given by the keyword where, and it's part of the signature here.
+So you see I haven't opened the curly brace yet.
+We're going to give it the type, so type T, and then the bound.
+And we're saying here that this function, add, only works on types T that implement the add trait that's found in the standard library.
+So the plus operator.
+Note that we are putting this bound on type T, which means it also affects the output or result type as well.
+So this essentially says that this function will work on all numerical types, assuming that A and B are the same type.
+So things like integers and floats.
+It does not work on Booleans because Booleans do not implement this add trait.
+And as you can see, sure enough, add is indeed a trait.
+Strings are a little tricky.
+You can use the addition operator to concatenate a string with a string slice, but not two strings together and not two string slices together.
+So you would need two different types here for A and B to support strings.
+We're just going to ignore that for now to keep this example very simple.
+But you could create a new version with two types to concatenate strings together.
+And then also note that you can specify multiple trait bounds, hence the comma here, where needed.
+But we're going to leave it at one trait bound.
+And we are going to implement A plus B just like we did before.
+And it looks like I misspelled output.
+So let's correct that spelling.
+All right, let's save this.
+And let's try running it again.
+Sure enough, this works.
+We can add these two numbers together and get an output of seven.
+Let's make a note that this works for I 32.
+Let's try with floating point values.
+We'll run that.
+Sure enough, we get that correct output.
+As I mentioned earlier, this should not work with Boolean values.
+So we'll save and run that.
+We'll get this error cannot add bool to bool because there is no implementation for bool plus bool.
+Because Booleans do not implement this trait here, this add trait.
+So that does not work.
+
+Let's try it with string slices.
+And as I mentioned, that there is no implementation for string slice plus string slice.
+So this does not work either.
+Let's make a note there.
+And I will comment this out.
+And now you have a working example for trait bounds.
+All right.
+Let's move on to number four where we can see how generics can get used in structs in addition to functions.
+You've probably already seen this with the result and option types.
+Those are generics.
+And we can define a custom struct here called pair.
+We will declare our types T and U.
+Those are generics.
+So those can be any concrete type.
+The first value will be of type T.
+And the second value will be of type U.
+Now we're going to provide an implementation of various methods for this struct.
+So the struct can hold data and it can also perform actions using these methods.
+You'll find this pattern quite a lot in Rust.
+This is very similar to a constructor used in object-oriented programming languages like C++.
+We're going to manually define a new function here.
+That's going to be a method that's part of this pair struct.
+You will need to give it the first and second values.
+Note that those are types T and U as we declared earlier.
+And it's going to return the actual instance itself.
+So whoever is calling this will have ownership.
+And we're just going to construct an instance of pair pass in first and second.
+Let the types fill out where they may for first and second or for T and U.
+And then the caller will have an instance of that struct.
+And just for fun let's implement another method here just to see how this works.
+We will recreate our swap function.
+But as a method that's part of this struct.
+In this swap method we will put self as a parameter.
+Because this method actually takes ownership of the calling struct.
+It's going to use the information in that struct passed in.
+Swap the first and second values.
+And then return essentially a new instance of the struct with those values swapped.
+So note that we have to return pair type U and T instead of T and U this time.
+And then in the new struct that we're constructing we'll just assign first as the self.second and second as self.first.
+And that instance gets returned.
+So in our main we're going to call pair.
+That goes into the namespace of that pair struct.
+Allows us to call the methods in that struct.
+So new will pass in 42 as our first value and hello as our second value.
+Those types get automatically filled out.
+Well actually the compiler performs monomorphization.
+Which generates concrete types of these structs and functions.
+For which should be integer 32.
+And a string slice.
+Then we will call swap on that collection.
+To get a new pair with the first and second values swapped.
+Let's print the first and second values of that swapped set.
+Which should be reversed from that first collection we created.
+Let's save that.
+And cargo run.
+That should compile.
+And sure enough hello comes first.
+Even though it was second in the first.
+And 42 comes second.
+All right.
+Let's remove this.
+And let's move on to generic enums.
+This is similar to declaring generic structs.
+All right.
+Let's create something called maybe.
+We're essentially going to give a demonstration of how the option t enum works in core rust.
+Option t looks like this.
+It's the enum value sum with the generic type t.
+And then none.
+Which is just another enum value.
+But it doesn't hold any other type.
+It can't hold any other information.
+By default rust does not have a null or none type built into the language.
+Like you might find in like c++ or javascript or python.
+This is to help prevent some memory errors.
+But it does have this option enum where it wraps up values into this enum.
+So sum contains the value you actually want.
+And none means, well, none.
+This is essentially a placeholder for null or nothing.
+Let's create a very simple function.
+So we have to call an implementation for our enum here.
+We're going to recreate the unwrap function that we saw for things like options and results.
+So you can get a sense of how those are implemented.
+So our function signature will consume self, the instance of the enum.
+And it will return type t.
+That's the same type t that's being held in that something value.
+A quick note about enums and rust.
+You must explicitly list out all of the variants or options in that enum.
+Otherwise, you will get a compiler error.
+So inside of unwrap, we're going to call match on self.
+If that is of type maybe something.
+So that something variant in maybe.
+Get that value and just return the value.
+So hence type t.
+Or if the value is nothing, actually crash the program.
+Call the panic handler and give it the error message of called unwrap on nothing.
+This is a very simplified version of what's going on in unwrap under the hood of unwrap in the core library.
+So in our main, let's instantiate some things here.
+So we will say let no value.
+And I need to actually make this a type.
+We will make it a type of maybe string.
+So t becomes type string.
+But then we're going to set it to the variant nothing here.
+We will also create another enum that is of type f64.
+So notice that we have to use the angle brackets to create a concrete type for maybe here.
+And we will set maybe something.
+And we will have something hold 1.2345.
+That is a floating 64-bit value.
+We can use the match function to check manually.
+So we will match no value.
+If that is equal to something, we will get the value in that something and just print it to the console with value in front of it.
+If the variant is nothing, we will say no value found.
+So we can execute these statements and not do anything with return values if they return anything.
+Or if we happen to know that it's probably not nothing because that would crash our program, we can call unwrap here.
+And that's what we've been doing in our embedded code.
+Rather than checking manually with this match statement, we can just call unwrap here.
+And that will get the value in some number, return it so that it fills out the unwrapped value.
+And that should print out the floating point value for us.
+Let's save.
+And we'll call cargo run.
+Sure enough, no value contained nothing.
+So then it printed out no value found thanks to this match statement.
+And then we printed out the value that was stored in something here.
+And we got that value by calling unwrap.
+Because if we just try to call some number, you can see we get this error because maybe does not implement the display trait.
+So it has no way of printing that.
+So let's just keep unwrap in there.
+And you have a working example on using generics with enums.
+Let's see how we can apply what we've learned with generics to some embedded code.
+Let's close down our example here.
+I'm going to clear our console.
+Let's copy blinky.
+Make sure there's no target folder.
+So let's delete that.
+Just makes copying go a little bit faster.
+We will copy blinky.
+We will paste it.
+And we will rename it to LED wrapper.
+In here, let's go to source main.
+So this is the blinky example we wrote in the second episode.
+Let's scroll down.
+And we will create our struct after we set up our constant values here.
+So let's create a generic LED struct.
+This is going to be a very simple wrapper that we can give it some functions like on and off.
+And it knows what to do with that based on the pin that we've defined.
+So if you remember, those pins are actually generics.
+So we can take whatever concrete type we've defined for the pin and set it to the pin of our LED here.
+And just for fun, let's add another value here called active high.
+Whether you've connected the LED to ground or you've connected the LED from, say, high through a resistor to the pin.
+So if it's active high, we toggle the pin high in order to turn on the LED.
+And if it's active low, we toggle the pin low to turn on the LED.
+And we will implement that switch here.
+So we're going to provide an implementation of our LED struct where we give it some methods.
+So we will declare this as a generic implementation.
+We will use P as our type.
+And we're going to give it a trait bound here where we say that this will only work where P implements the output pin trait.
+Because if it's set to an input pin or something else, we probably should not be toggling that pin anyway.
+I've been using the where keyword to be explicit.
+And it's useful when you have multiple trait bounds you need to list out.
+You will often come across this shorthand inline version of a trait bound where you say impel or implementation P colon and then your trait bound.
+So output pin.
+And then you give the struct its name and then list the type P.
+So if you see something like that with the colon, knowing that P is a generic, that output pin is a trait bound.
+This is equivalent to using the where keyword that I used below in my actual signature.
+So this is equivalent to this.
+Let's create our faux constructor here.
+We will say function new pin is of type P active high is of type bool.
+As we saw earlier for our struct, we will return an actual instance and ownership of that instance where we just assign the pin and active high arguments passed in.
+So now we'll define a function called on.
+We'll pass in a mutable reference to the struct.
+And in that reference, if active high is true, we will say pin dot set high and then unwrap that value.
+So this will panic.
+If some error occurs trying to set that pin high or if it's active low, set the pin low.
+This should turn the LED on.
+We're going to do the same thing with the off function, but if it's active high, set the pin low.
+And if it's active low, set the pin high.
+This should turn the LED off.
+All right, let's scroll down to our main function.
+We'll set up our clocks, get the SIO, split off ownership of the peripheral struct.
+We're going to set up our LED pin and this is where we're going to use our wrapper.
+We're going to say let mutable LED.
+Remember, we need mutable because we do need to change the internal values of this based on the changing of the internal values of the LED pin that we've passed in.
+And that is also mutable.
+We're going to say LED new.
+We're going to pass in ownership of the pin and we're going to set it to active high because that's how we have connected the hardware.
+Then in loop, we're no longer going to manually toggle the pin.
+We're going to say LED on and we're going to say LED off course with semicolons.
+That's using our wrapper, which was based on a generic type based on the pin.
+And if I refresh the rust analyzer server, I can press control and alt.
+You can see that the pin actually changes type here.
+This concrete type is based on the GPIO number we set here.
+So if I used a different pin, this type would actually change and you can see I'm getting a warning here.
+It would compile, but it does not need to be mutable.
+So I can take back my statement about LED pin being mutable because we pass that in and we still maintain that LED is mutable.
+So something is changing, but we just care about LED being mutable.
+All right.
+So in our terminal, let's go out of generics examples.
+Let's go into our LED wrapper.
+Let's say cargo build and wait for that to compile.
+And we're going to use Pico tool.
+You have to convert.
+We'll give it target.
+Go into the thumb V eight folder.
+Debug.
+And it looks like the elf file is named Blinky because I forgot to change the name of the project in cargo dot Toml.
+That's fine.
+It's still a Blinky program.
+We'll give it the input type of elf and let's dump it into firmware dot UF two.
+Looks like I missed something up here.
+All right.
+I just reran it.
+I think there was a value after elf that it didn't like.
+So we ran that command again.
+That seems to work.
+Let's hold the boot select button and plug it in.
+Let's go into our repository workspace apps.
+We've been working with LED wrapper.
+There's firmware dot UF two.
+Copy that and paste it into the mass storage device drive that appeared.
+You should see the LED blinking on and off.
+In the next episode, we'll put everything we've covered so far into practice to write a simple driver library for our TMP 102 sensor.
+Feel free to review anything up through chapter 10.2 in the rust book.
+Hopefully rust is starting to make a little more sense.
+Now that we've covered many of the basics, you'll get a chance to put it all into action next time.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.
+Stay tuned.

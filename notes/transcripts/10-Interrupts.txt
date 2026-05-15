@@ -1,0 +1,486 @@
+Interrupts are an important part of many embedded systems.
+They allow us to stop the current thread of execution to handle some event and
+then pick up where we left off in our program and they handle these events
+quickly and in a predictable manner.
+Interrupts can be triggered by external events like an input pin changing state
+or internal events such as a timer expiring.
+We previously looked at creating automated tests using rust built in test framework.
+This time we'll dive back into embedded specific code and look at how to generate
+and handle hardware interrupts.
+Let's get started.
+Let's start by going into apps.
+We're going to go into blinky.
+Let's get rid of the target folder so that it copies a little more quickly.
+We're going to copy blinky.
+We're going to paste it in apps and let's rename it.
+To timer interrupt.
+Let's go into cargo dot toml.
+Let's rename this to timer interrupt so it matches our project name.
+We will also need the fugit library.
+This gives us access to some time types.
+The other library will need is critical section.
+This gives us access to things like some basic new Texas that allows to change
+things like global variables in a safe manner.
+Let's save that and let's open up our main dot RS.
+If you scroll down, we're actually using hardware timers in the blinky code.
+It's just been abstracted for us.
+This gives us access to things like delay.
+This creates a blocking delay for us and it is using a hardware timer that's been abstracted.
+But we're going to see how to set up a timer slash counter in hardware and trigger an interrupt service routine for us.
+In other languages like C, it's easy to set up a global variable and then share that data between things like your main thread of execution and interrupt service routines.
+You'd usually have to prefix the keyword volatile in front of it to let the compiler know that it's being used across essentially multiple threads, but one thread and an ISR or multiple threads.
+If you're in something like a real time operating system, this can be tricky to accomplish in rust due to the ownership rules.
+Who has that particular variable?
+Is it the ISR or is it the main thread?
+We can get around that by using these things called ref cells.
+They let us modify data with only immutable references so we can have multiple immutable references and they enforce the borrow rules at runtime instead of at compile time.
+So this is a bit of a workaround.
+We're going to enforce this type of access using a mutex found in the critical section library.
+Mutexes are like keys.
+You can only have one at a time to unlock access to say a piece of data or a section of code.
+Our concrete hardware HAL is going to remain the same.
+We are no longer going to use delay in the embedded HAL and we're going to change output pin slightly.
+In embedded HAL, we're going to say digital stateful output pin.
+This allows us to use the toggle method in that output pin struct.
+If IntelliSense isn't working, I'm going to press control P, type a greater than symbol and restart the server.
+Give it a second to re-index everything and it looks like it works there.
+So this is a trait.
+If we go to the definition, you could read more about the trait.
+This gives us access to this toggle function because the stateful pin remembers its previous state.
+All right, back to our code.
+We're going to import some pin related structs in enums so that we can define a global pin type.
+Previously, we defined something just in our main and now we're going to make it global so that we can access it from the interrupt service routine.
+Next, we're going to import some timer related traits, structs in enum from our HAL.
+The copyable timer lets us use multiple alarms referencing the same underlying hardware timer.
+Then we're going to need access to the underlying nested vector interrupt controller that's in most of these ARM Cortex-M microcontrollers.
+By doing this, our code is not really portable anymore since we are tying it to specifically Cortex-M microcontrollers.
+This is what's going to allow us to set up an interrupt and then fire it off in order to run our function or our interrupt service routine.
+Then we're going to use the micros duration U32 in the Fuget library.
+This is going to help us just create some numbers that deal with timing and duration.
+We have our custom panic loop.
+Copy the boot data.
+Those stay the same.
+The crystal stays the same.
+And before we get to main, let's set up our global state and access to our pins.
+We're going to make a shorthand type here.
+So we're going to use the type keyword.
+So LED is going to refer to this concrete type that we're going to set up.
+This is a pin, and if you remember, a pin is a generic type that's defined by other types.
+In this case, we're going to set the pin number to GPIO 15.
+We're going to set the function to SIO for that single cycle input output, and that type is going to be set by SIO output.
+So this is an output pin, and then we set it to have the pulldown enabled by default.
+Note that pull none here would actually probably make more sense,
+but the into push-pull output method we've been using uses the pulldown,
+so I'm just going to keep using what that uses.
+So if I go to the definition of pin, you can see that.
+So we've got the ID, so that's that pin number GPIO 15.
+We set the function, that's the type here, and then we set the pull type, so that's pulldown.
+Next, we're going to create some global static variables.
+This is what's going to allow us to share data and toggle the pins in both the main function,
+or our main thread of execution, and the interrupt service routine.
+All right, there's a lot going on in this line as I'm typing it out here.
+The static keyword means that this is a global variable that lives for the entirety of the program,
+so that defines the lifetime of it.
+We'll give it the name GALARM for global alarm.
+That's the name of this variable, and it's going to be of type mutex, first of all.
+This is an atomic lock or key, depending on how you look at it,
+that allows us to disable interrupts while accessing this data.
+This guarantees some memory safety during an interrupt service routine.
+That is of type ref cell.
+This, as you remember earlier when we imported that library,
+gives us mutable access to shared data, even if that data is an immutable reference.
+So it allows us to mutate the data during runtime,
+which in this case can only be accessed through a mutex.
+So that's how we're saying that only one piece of code can access this data at a time in order to change it.
+That's affording us the protection.
+This is going to be of type option.
+That can hold some or none, as we've seen before.
+We will start it as none, but it's going to allow us to move values in and out of the global variable,
+and we can change who owns that value or who owns the global value.
+The option some type will hold alarm zero,
+and that's going to be defined by the copyable timer zero that we imported earlier.
+So this timer gives us a concrete alarm type that we can use.
+We're going to initially set this to a new mutex,
+and we're going to give that a ref cell new and none.
+So that is the option type none here.
+So this is set to nothing, but it's protected by a runtime ref cell that allows us to change the value on the inside,
+and that's protected by a mutex that we have to request to unlock in order to get inside of this ref cell.
+We're going to do the same thing with our LED pin.
+So we set up one for the alarm for our timer, and we set up another for our LED pin.
+So this is a static GLED for global LED.
+This is going to give us access to that pin.
+It's going to be of type mutex, and that mutex is a type ref cell,
+and in there it's an option, so some or none,
+and then the sum will contain the type LED pin.
+The LED pin is that alias type we just set up earlier where that is a particular concrete type of pin.
+We will also set this to an initial value of mutex new in that, ref cell new, and none.
+So this is initially containing none, and we'll move values into that when we need to during runtime.
+All right, let's scroll on down.
+When we initially set up the pin into push-pull output here, we set it as mutable.
+We actually don't want it to be mutable because we are going to access it mutably
+through that ref cell, as you'll see in a moment.
+After we've configured our timer, we want to set up an alarm from that timer.
+So we're going to say let mutable alarm equal timer, so that's the timer we just created,
+in the line above it.
+From there, we're going to get access to alarm zero,
+and we'll unwrap that option that alarm zero returns.
+Let's go take a look at alarm zero.
+You can see you have a number of alarms available.
+Looks like up to four different alarms.
+And they can be based on the timer that we configured and passed in to this timer earlier.
+So now we have a timer with an alarm, so it works much like a counter,
+that we can use that will trigger an ISR or interrupt service routine when it expires.
+So to set up an alarm to fire, we're going to call alarm.schedule.
+It does return a value, but we're just going to throw it away.
+So to avoid compiler warnings, we'll say let underscore,
+and then we'll say alarm.schedule.
+Notice here that it wants type duration,
+and that's a generic of U32, one, and one million.
+This is where that Fugit library comes in handy,
+because we can just say micros duration U32.
+It fills out that type for us,
+and we can say millis 500,
+and it will do the necessary conversion on the backside for us
+to convert it into the microseconds that schedule is looking for.
+Very important here, we then need to call alarm.enableinterrupt.
+This actually toggles the interrupt on,
+otherwise it won't fire,
+and our interrupt service routine will never run.
+Okay, this is when we actually move the alarm and LED values
+that we just finished setting up to those global values,
+so that the interrupt handler can then use them to toggle the pin and reset the alarm.
+We're going to do that with this with function in critical section.
+In there, we're going to use something known as a closure pattern.
+This is an inline anonymous function,
+similar to lambda functions you might have seen before in C++ and Python and other languages.
+CS is the name of the critical section token.
+This is something that gets passed in and then we can use to unlock that mutex
+so that we can change the values.
+When we take this critical section,
+it also indicates that the interrupts are disabled
+for this particular section of code that we're about to run.
+We're going to have galarm, which is our global variable.
+We're going to say dot borrow,
+and we're going to give it that critical section token.
+This act gives us access to the data through the mutex using that token.
+Whatever comes out of that, we're going to say dot replace,
+and then we're going to say sum, because remember this is an option,
+and we will pass in that alarm we just configured.
+We're going to do the same thing with gled.
+We're going to say dot borrow,
+give it to the critical section token,
+dot replace, sum, and give it that LED pin.
+This is transferring ownership of alarm and pin
+and essentially wrapping it inside of ref cell inside of a mutex
+so that now the only way we can change those or use those values
+is by first getting that mutex or critical section token.
+Looks like I made one mistake here.
+This should be critical section.
+Because we have to go through that mutex and ref cell,
+we can't use a regular assignment.
+That's why we need to go through all of this trouble
+so that we now have a global variable
+that we can access from two different threads of execution,
+one being our main thread
+and the other being the interrupt service routine.
+If you go to the RP 23.5x hal,
+scroll down, you'll see the re-exports,
+and we see the peripheral access crate.
+So we'll go to that documentation.
+Scroll down to where you see enums.
+Go to interrupt.
+And you'll see a list of interrupt lines,
+and you can see how they're mapped to interrupt numbers
+in the RP 23.5x hal.
+We're using timer 0,
+so we need to use one of the interrupt lines here.
+So we're just going to pick timer 0 IRQ 0.
+That's the interrupt line we're going to be using.
+This should not be used anywhere else in the program,
+so we're fine to use it.
+We're directly manipulating hardware here,
+so we do need to use the unsafe keyword.
+Otherwise, the compiler is going to yell at us
+because this is potentially dangerous
+or just memory unsafe.
+In there, we're going to say NVIC.
+Remember, we had to import that library or that crate.
+There's a function in there called unmask,
+and we're going to say unmask hal pack interrupt timer 0 IRQ 0.
+That's the interrupt line we just looked at.
+We have to use this, at least for now,
+to manually enable interrupts.
+So this is how we enable the interrupt
+for that timer 0 and IRQ 0.
+You'll see that the interrupt service routine
+will have to have the name that matches
+with this interrupt line.
+That's how we register or connect an ISR
+to a particular interrupt or interrupt line,
+and the compiler knows how to make that happen.
+In our main loop, we're now going to do nothing.
+We could leave loop blank and just let the processor spin,
+but Cortex-M processors,
+since we're already using Cortex-M functions
+elsewhere in this code,
+they have this nice WFI assembly instruction
+that puts the processor into a low-power state
+until an interrupt occurs.
+This is essentially saying go to sleep.
+WFI, or wait for interrupt,
+returns after an ISR completes.
+In this case, our interrupt service routine will run
+that we're going to write in just a moment.
+WFI will return,
+so you could have loop do something,
+and then it will go back to the top of loop
+and put the processor to sleep again,
+waiting for that interrupt,
+or any interrupt.
+Now let's write our interrupt service routine.
+ISRs are given by this interrupt macro,
+or this interrupt attribute.
+This essentially turns it into a macro
+that registers the function in the interrupt vector table
+and generates any necessary code
+to properly save and restore CPU registers
+on this function entry and exit.
+Notice that we're giving it the name timer0irq0.
+That matches up with the interrupt line we put in unmask.
+So that's how the processor knows
+to call this interrupt service routine
+because this has been registered
+when the program compiles.
+In there, we're going to call this
+with function in critical section again.
+We're going to use this closure pattern.
+It's actually a lambda function.
+So we get this CS token coming into our function.
+And notice these vertical bars here around CS token.
+So closure patterns can look a little odd at first,
+but essentially this is being run
+and we're given CS.
+In here, this section in curly braces,
+this function we're writing,
+acts as our critical section.
+Then we can actually get mutable references
+to both our pin and alarm.
+To do that, we'll say let mute alarm ref.
+So this is going to hold our reference to the alarm.
+We'll say g alarm dot borrow.
+Give it the critical section token.
+This is the pattern we saw earlier.
+Then rather than calling replace
+because we're not going to update that value,
+we're going to say borrow mutably.
+So borrow mute.
+This function gives us a mutable reference.
+We're going to do the same thing with the LED pin.
+So we're going to say let mute LED ref equals g LED
+for our global static variable.
+We're going to say dot borrow.
+Give it that critical section token
+and say dot borrow mutably.
+Remember that these are options.
+So we do need to get the values in those.
+So we're going to say if let we're going to have a tuple here
+of some alarm and some LED.
+Alarm and LED are going to get filled out
+and we're going to use assignment here
+to say alarm dot ref dot as mute
+inside of a tuple for the first value
+and then LED ref dot as mute.
+So those some values get filled out
+and now we have access to alarm and LED.
+This let keyword in this if statement might look a little odd.
+This is known as a destructuring assignment with pattern matching.
+So on the right side,
+we create a tuple with dot as mute converting a mutable reference
+to an option to an option that contains a mutable reference.
+So assuming this option does contain some or some value,
+it will get assigned to alarm here
+and because of the mutable reference in this option,
+that gets passed along
+so that now alarm becomes a mutable reference
+for the rest of this block.
+This expression evaluates to true
+if both options are some.
+If either one of these contain a none value
+because, for example, the pin or the alarm
+was not initialized correctly,
+this left side does not get filled out
+and essentially this let evaluates to false.
+So this is enforcing that both options
+have some values in them and not none values.
+Assuming that's true, the rest of this gets run.
+If either one of those is none,
+then this if statement is skipped entirely.
+The first thing we'll do is clear the interrupt.
+This is to let the nested vector interrupt controller
+know that the interrupt's been handled.
+And remember that toggle function we were talking about?
+Well, now we can finally call it on the LED
+and we'll just assign the return value to an underscore.
+So we're going to throw that away
+and we will schedule our next interrupt
+for 500 milliseconds from now
+by using that same alarm.schedule method we saw earlier
+and we'll give it micros duration U32 millis
+and give it 500.
+That will handle filling out that type appropriately for us.
+And then make sure to give a semicolon
+at the end of this critical section.
+Let's save our work.
+If you're in libraries, go out of that,
+go into apps, go into timer interrupt.
+We're going to say cargo build.
+With any luck, that should build.
+Looks like we've got a couple of warnings here.
+We have an unused import at the top.
+So if we control click on main.rs
+and the line number,
+that will highlight for us.
+Sure enough, I left both of those in here on accident.
+Let's get rid of those and save.
+And let's try building again.
+It looks like it worked that time.
+And we are going to call picotool uf2 convert.
+Give it the location of the elf file.
+So target thumb v8 that folder debug
+the name of the elf file timer interrupt
+dash t elf to treat it as an elf file
+as the input.
+And then we will dump that into firmware.uf2.
+Hopefully that works.
+I'm going to press the boot select button
+on my picotool and plug it into my computer.
+That should pop up here.
+Navigate to your introduction
+to embedded rust folder
+that you've been working in.
+Go to workspace apps.
+Let's go to timer interrupt.
+Here is firmware.uf2.
+I'm going to copy that.
+And I'm going to paste that
+in the drive that enumerated.
+You should see your LED blinking.
+It might look the same
+as our original blinky demo,
+but you know that it's being done
+all with hardware interrupts
+while the processor just sleeps.
+This should get you started
+using interrupts in rust.
+Your challenge,
+should you choose to accept it,
+is to create an external
+pin change interrupt demo.
+When you press the button,
+it should toggle the LED,
+but you must do it
+with a pin change interrupt.
+If you go to the RP
+hell repository
+and go into the RP 23,
+five X examples,
+you should see a GPIO IRQ example.
+I highly recommend looking
+through this code as a start.
+Much of this should look familiar.
+It sets up some global variables
+protected by a mutex.
+It attaches an interrupt to the source,
+enables the interrupt,
+and then does nothing
+in the main loop.
+The interrupt service routine
+borrows a mutable reference
+from the global variable
+and uses it
+to check the button state.
+Notice that this example
+toggles the LED
+in the interrupt service routine.
+That's still prone
+to contact bounce.
+So I want you to modify
+this example
+to include a global flag
+that gets set on button press.
+Then in your main loop,
+check to see if that flag
+has been set,
+clear it,
+wait 50 milliseconds
+and check the button state again.
+If it's still pressed,
+then toggle the LED.
+It's okay to block
+for 50 milliseconds
+in this challenge.
+Just don't do it
+in the interrupt service routine
+as you usually want
+to keep those as fast as possible.
+I highly recommend
+using an atomic type
+as your global flag
+to keep it thread safe.
+Say maybe an atomic bool
+to indicate
+that the button has been pressed.
+I'll put a link
+to the repository
+with the solution
+in the description.
+In the next episode,
+we'll see how to enable
+step-through debugging
+with the Raspberry Pi
+debug probe.
+Good luck on the challenge
+and happy hacking.
+music playing.
+music playing.
+
+music playing.
+
+music playing.
+
+
+
+music playing.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

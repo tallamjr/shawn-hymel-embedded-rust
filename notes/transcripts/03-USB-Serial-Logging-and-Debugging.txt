@@ -1,0 +1,377 @@
+In the last episode, we got a basic blinking LED working.
+You can do a lot with that, but it's pretty limited when it comes to helping us debug programs.
+Okay, other than bit banging a UART port.
+Thanks to frameworks like Arduino and MicroPython,
+using the USB port to print simple messages is now a very popular method for debugging.
+So let's create a simple USB serial program to show how we might do that in Rust.
+The blinking LED is a great starter program.
+We'll build on that to demonstrate how to write simple messages to a serial terminal running on our host computer.
+That will provide a basic template for debugging programs going forward.
+The only thing we'll need for this demo is the Pico 2 board.
+We won't connect any external electronics to it.
+We're going to introduce two new libraries for this example.
+The first is USB device.
+This gives us a USB stack for various embedded devices in Rust.
+You can see the different hardware that it supports.
+It does actually support our RP2350, as you will see from this example.
+While USB device provides the low-level driver,
+this USB-D serial library provides a CDC or communications device class implementation,
+which basically gives us serial over USB.
+So we will be using both of these to write strings out over serial,
+much like you might have seen with something like Arduino.
+That way you don't have to have separate debugging hardware, like the debug probe,
+for your particular device.
+Now, keep in mind this is for the RP2350,
+which happens to have a USB device peripheral on board.
+Some other chips might not.
+So keep that in mind if you're trying to use native USB to have a serial COM port.
+Otherwise, you might want to turn to a UART driver.
+But for now, we're going to use this.
+Rather than rewriting all of that boilerplate code from the previous episode,
+we're just going to start with Blinky.
+So go into Blinky, right-click on Target, and let's delete it.
+Yes, that's going to delete all of our build artifacts,
+which can actually contain many, many megabytes.
+It's going to make copying so much faster.
+Let's right-click on Blinky.
+Let's copy that.
+Right-click on Apps.
+We're going to paste that.
+Let's right-click on our copy here.
+We're going to rename to USB Serial.
+In our project here, let's bring up cargo.toml.
+Feel free to delete this lock file if you want.
+That just pins certain versions for us when we go to build.
+That file is handled automatically for us.
+So by deleting it, it allows the build system to recreate it from scratch for our new project.
+You don't have to, but I find it sometimes helps.
+In our dependencies in cargo.toml, we're going to list out the USB device library.
+We will set that to version 0.3.2 that we saw from crates.io,
+and we will also need USB-D-serial.
+We will set that to version 0.2.2.
+That's actually all we need for new dependencies.
+So let's save that, and then we will go to source main.rs,
+and let's change this to work with our USB serial device.
+We're not actually going to use embedded HAL directly here.
+So I'm going to show you how to do a non-blocking version of delay,
+essentially using something like Millie's from Arduino.
+And we're not going to control an output pin.
+We're not going to be flashing an LED anymore.
+We're just going to be printing stuff over the serial port over USB.
+So let's get rid of these.
+Let's change this comment.
+From USB device, we will include class prelude and all of the functions and structs in there,
+as well as just the prelude.
+Preludes are often found in some of these complex drivers and libraries
+that automatically includes other stuff for you.
+So we just need to include those two things.
+Notice I'm using curly braces here.
+So rather than listing these separately, like USB device, colon, colon, class prelude,
+and then on another line, use USB device, colon, colon, prelude,
+this allows us to say, hey, within USB device, include both class prelude and prelude,
+and then all of the things in each of those namespaces or modules.
+USB D serial, we need to import serial port because that's what we're going to be using.
+Let's scroll down to our main.
+We will still need our peripheral access crate, and we still want to set up our clocks.
+Both of those are necessary for things to run.
+We are not going to be using a pin directly here.
+So let's get rid of our SIO, splitting off that peripheral struct and getting ownership of that pin.
+We will need a timer because we are going to get a timestamp from this timer directly
+rather than using something from embedded HAL.
+Then we're going to initialize a new USB driver,
+and we're going to do that with this USB bus allocator,
+which comes from our USB driver library.
+We're going to say new, and then in our HAL, we should have access to this USB and USB bus,
+which we say create a new version of this peripheral or driver.
+From that, our peripheral access crate should have USB and this USB DP RAM.
+DP RAM should stand for dual port RAM, if I remember correctly.
+This just sets up sections of memory for us to use.
+We also need to pass in the USB clock that comes configured when we initialize the other clocks,
+and then we'll say true, and then pass in the resets.
+Now, IntelliSense does not seem to be working for me right now,
+probably because I have not downloaded the libraries.
+So let's go to view, terminal.
+Let's get out of this.
+Let's clear.
+Let's go to our USB serial project.
+I'm going to say cargo build.
+That should pre-build and download the USB drivers for us.
+Hopefully that worked and everything built,
+even though this program is not going to do a whole lot right now.
+But with any luck, let's see if we can go to definition.
+Okay, no definition found for this USB allocator,
+which means we can press control P.
+We can say a little greater than symbol.
+We will restart Rust Analyzer and see if that indexes the USB drivers we just downloaded.
+All right, if that worked, hopefully we can go to definition of new.
+Yay!
+We can actually see these libraries now.
+So where we created a new USB bus allocator,
+you can see that expects bus type B.
+That's given by this generic indicator here.
+And it gives us a bus allocator when it returns.
+Okay.
+And then to do that, to create this new bus, we go into our how.
+We say in that USB namespace, USB bus, we create new here.
+Let's go take a look at that definition.
+You can see that returns itself, which should be a type of USB bus.
+That's a struct.
+And that holds some other stuff for us.
+Don't worry about digging into that too far right now.
+Just know that it's access to our USB bus.
+And you can see the parameters that it requires here.
+So we have the control register.
+We give it USB.
+We give it the DP RAM.
+We tell it which clock to use.
+I guess this attaches to that phase lock loop.
+And then we say force V bus detect bit.
+By setting force V bus detect bit to true,
+that acts as if the USB is always connected.
+So our program will continue to run in theory,
+even if we don't have a USB connection.
+But to power the device, we have to connect USB anyway.
+This just means go ahead and, I guess,
+start spitting out serial data over that port,
+even if the Pico 2 is powered by some other mean.
+So feel free to play with that bit if you want to try sending it to false to see what happens.
+But for now, we'll leave it at true.
+It seems to work.
+Next, we'll create our USB device using that bus we just initialized.
+So in the USB device builder, we'll say new, give it an immutable reference to USB bus.
+And then we have to assign a VID and PID for vendor ID and product ID.
+If you are making a USB-based product, it's generally a good idea to register an official VID and PID.
+This usually costs you a few hundred or a few thousand dollars to do this officially.
+If you are working for a company, they will usually have their own VID or vendor ID you can use.
+Vanuian, as far as I could tell, is a single engineer, has his own company, registered this HEX16C0VID,
+and basically just allows people to use it for internal lab use for testing.
+So that's the one we're going to use for our prototype here.
+And HEX27DD is what Vanuian, I guess, recommends using for CDC-type devices.
+If you're just playing with stuff internally, you're pretty much welcome to try whatever for VID and PID here.
+But note that your operating system will generally look at these two numbers and try to figure out which driver to use.
+At least thus far, Windows seems to recognize this VID and PID combo and assign it a serial driver.
+We then need to assign it some metadata so that if you look into the driver of the attached hardware,
+this information gets sent over to the operating system and you can look this up.
+So we need to pass in a reference to this array.
+And we're going to fill out this returned string descriptors from default.
+And we're going to change a couple of the string descriptions in here.
+So manufacturer.
+Feel free to fill out whatever you want in there.
+I'll say fake company.
+For the product, we'll set that to serial port.
+And then put whatever you want in for a serial number.
+I'm just going to say test.
+Okay, with that metadata filled out, that should return a result.
+So we're going to call unwrap here.
+Again, if that fails or returns an error, that'll just go to our panic handler that will just hang the processor.
+If you go to usb.org, you can look up the defined class codes because we need to define a specific class here.
+The one we want to use is this communications and CDC.
+That's the class.
+You can see all the different classes that are available for USB devices.
+But we're going to be sticking with CDC control.
+So we're going to use two.
+So this is, I guess, two hex.
+Yes.
+Also two in decimal.
+So we're going to pass two into device class there.
+And I'll make a note where we got that device class from.
+Then we're going to say build, which I'm assuming takes all this information, initializes the device for us, and gives us a handle that we can actually use.
+Then we're going to create a receive buffer.
+That's 64 bytes.
+This is a fast way to initialize an array.
+And we're going to initialize it to all zeros.
+So we're going to say zero.
+That is type unsigned 8-bit value or 8-bit integer.
+And we're going to say semicolon and make 64 of those.
+So this is 64 bytes.
+The type is unsigned 8-bit integer.
+And if we press control and alt, you can see, sure enough, this is an array given by the brackets.
+And it is of type unsigned 8-bit integer.
+There is another way we can do this.
+So if we just tried it like this, notice that there is no type information here.
+And the compiler would either guess.
+And if we don't specify, then it would probably throw an error at us if it can't figure out what type we mean.
+If we want to be explicit, we could say an array that is of type 8-bit unsigned integers.
+And we can tell it how many values or how many elements in that array.
+And that should work for us.
+But the faster way to do this and the common way is you will see initialize the array at all zeros and make those zeros type unsigned 8-bit integer.
+Then we get to our super loop and we're no longer going to blink.
+So in here, let's get rid of our blink code.
+First thing we want to do is get a timestamp.
+And that should get the current counter value.
+And we can use some functions to convert this to, say, milliseconds.
+So don't worry about the exact value in counter right now.
+Something we have to do at least every 10 milliseconds is call this USB dev pull function.
+Otherwise, the USB device won't work.
+It won't initialize itself to the operating system.
+And you will get errors where it's not initializing.
+We need to pass in a mutable reference to this serial array.
+Which, as you can probably guess, I did not define.
+And we need to do that after we set up the USB driver.
+There is a serial port struct that we can use.
+And we have to pass it in our bus.
+And we get this handle.
+We have ownership of this handle that we can use to write out to or read from like a serial port.
+So now we can pass that into pull.
+The next thing we're going to do is attempt to read from the serial port.
+We'll pass in a mutable reference to that receive buffer.
+That allows this read function to fill up that buffer if needed.
+And we're going to put it inside of this match statement.
+A match statement in Rust is similar to something like a switch case statement that you might have seen before from like C and C++.
+But it's a little more powerful in that it can match types, not necessarily just values.
+So the first case here is if read, you can see it gives us a result here, comes back with OK.
+And the internal value is 0.
+That means nothing was read.
+So we're going to do nothing.
+The other thing that could happen is it comes back OK with some value other than 0, which means some bytes were read.
+In that case, we're also going to do nothing.
+I'm going to leave this available for you as a challenge that you will see later in the episode.
+And then it could also come back with some sort of error.
+These values or parameters given inside of these enum possibilities, OK, and error, these can match to something given by the result returned by serial.read.
+And it gets passed into whatever we write here.
+Notice that we are using this equal greater than symbol to mean an arrow, essentially.
+So if this matches to the output of read here, then execute whatever statement or expression is in here.
+Note that you can return something from this, which is what makes match very powerful.
+So you could use it like a switch case, or you could use it like a multiple if-else statement.
+And you have access to count inside of here if you want to, say, I don't know, print out the number of bytes read.
+Or you could print out the error message in here if you so desire.
+Now that reading is done, even if we don't do anything with reading, we can send out our message.
+To do a non-blocking delay, because remember we have to call this poll function every at least 10 milliseconds,
+we can compare the current timer or the current counter to our previous timestamp.
+We can use this .2 millis function to convert it to milliseconds, and then say,
+hey, if this is equal to or over 1,000 milliseconds, go ahead and print something to the serial port.
+So this is what allows us to do non-blocking code with something that's very similar to millis in, say, Arduino.
+Before we print something, we should reset that timestamp so that this can execute again in another 1,000 milliseconds.
+And we are going to write, hello, exclamation point, and with a carriage return in newline to the console,
+the lowercase b converts this string to a byte string literal.
+Rust uses UTF-8 by default for strings to support other languages.
+So if we want to use something like ASCII, we have to convert this to individual bytes, which is what this lowercase b does.
+We can then use serial.write to send out this, what essentially becomes an array of individual bytes.
+Over the USB port, I find that write returns some result.
+You're welcome to check that if there was some error.
+You can also assign that return value to some variable.
+The underscore in Rust means it's some variable we don't plan to use, and it lets the compiler know that.
+So if we didn't include anything here, this would work, but you're going to get a warning.
+So to avoid that warning, we're just going to assign this and never use it.
+Like I said, you're also welcome to unwrap this or catch any errors if you so desire,
+but to keep this simple, we're just going to blindly write this out over the serial port.
+Okay, let's go to file, save.
+Let's go to view, terminal.
+I'm going to say cargo build again.
+With any luck, this should build.
+It looks like I failed something here.
+So because this is an unused variable, I'm going to put an underscore in front of it by convention.
+You can see it tells me to do that in the compiler warning here.
+For your challenge, get rid of that underscore when you actually go to use count here.
+Let's scroll up.
+And we no longer need timer to be mutable because we're not using it in delays like we did in the previous episode.
+So we can delete that mutable keyword.
+It's also called blinky.
+So let's save this.
+Let's go to cargo.toml.
+Let's change blinky to USB serial.
+So it actually changes the name of our executable.
+Great.
+Let's say cargo build again.
+And hopefully that builds.
+Looks like it did.
+We're going to call Pico tool again.
+Use the UF2 sub tool.
+Say convert.
+Go into target.
+That thumb V8M directory.
+That's our target.
+Go into the debug profile.
+Point it to the USB serial elf file that we made.
+Say dash T elf for the elf format for the input.
+And say firmware.uf2 to convert that to a UF2 file.
+Hold the boot cell button on your Pico 2 board.
+Plug it into your computer.
+If you're on Windows, this will pop up for you.
+Go into your workspace in that repository that we've been working in.
+Go to apps.
+Go to USB serial.
+Find firmware.uf2.
+Let's copy that.
+Go to the mass storage device that enumerated.
+Paste that in there.
+With any luck, that should reset automatically for you.
+I'm going to use putty here.
+But you are welcome to use any serial program that you so desire.
+So for me, I need to go to device manager.
+See that I'm on com7.
+That's what got enumerated on my computer.
+If you're on Linux, you'll have to look in like slash dev to figure that out.
+Use whatever serial program you like.
+I'm going to go to serial.
+Change this to 7.
+1, 1, 5, 200.
+Should be the default.
+Click open.
+And sure enough, we see hello getting printed over the serial port once per second.
+Feel free to close this down when you are done.
+And let's bring back up our code.
+And let's examine a couple of things here.
+The image, by default, installed a few utilities for us, like cargo bin utils.
+So if we go to view, terminal, that we've been working in here,
+you can say cargo size.
+And that will automatically check the size of the binary for you.
+I believe it will try to compile it if it's not already built.
+You can see that this program takes up about 104 kilobytes in memory, which seems like a lot for an embedded system.
+One of the big complaints of Rust is that it generates huge binaries.
+And you can imagine this only growing as we add more complexity to our program.
+One of the reasons for this is because this profile dev, so if you go to cargo.toml in USB serial,
+you can see that we are using all of the defaults for our debug profile, which means the build system includes all of the necessary symbols and debugging and tracing,
+all of those things that help you do things like step through debugging, peaking at your code, monitoring values, and so forth.
+By default, Rust includes all of that, which means your executable can grow quite a lot in size, which might be a problem for some embedded systems.
+While that's fantastic for debugging, what happens if you want to go for release or you actually need to save on some space?
+We can create a new release profile here.
+Under this profile release section, we can then specify some various compiler options.
+So opt level S, this tells the compiler to optimize for size, hence S.
+You could also use something like opt level 3 to optimize for speed, but let's leave it as S.
+LTO means to enable link time optimization.
+Normally, each crate is optimized separately as they are individually compiled, but LTO looks at them together.
+This allows it to inline functions across crate boundaries, and it also eliminates unused code more aggressively.
+We also have code gen units 1.
+This forces one parallel compilation unit.
+A compilation unit, in this case, is a chunk of code or libraries that gets compiled together.
+The build system figures that out for us.
+With this set to 1, it means everything gets compiled together.
+This allows for better cross-function optimization, but it means you have to wait longer for compilation.
+Then we have strip equals true.
+This forces all of the debug symbols to be removed from the binary.
+This results in a smaller binary, but as you can imagine, it can be harder to debug if you're doing things like step-through debugging.
+Okay, so let's save that.
+Now, to build that particular profile, we're going to say cargo build dash dash release.
+Once that's done, we can say cargo size dash dash release.
+That will...
+Looks like it rebuilds again.
+And you can see 15 kilobytes, which includes a USB device stack, is pretty impressive for our embedded system.
+15 kilobytes makes me feel much better about being able to work with Rust in embedded systems.
+We can also call PicoTool UF2 Convert.
+Go into Target, Thumb V8M.
+Don't forget to go into the Release folder this time.
+You should see USB Serial.
+We'll say that's type Elf.
+And we'll say dump that UF2 to firmware.uf2.
+Go ahead and put your Pico into bootloader mode again.
+Go into Workspace.
+Go into Apps.
+USB Serial.
+This should be the new firmware that we just created, so I'm going to copy that.
+I'm going to drop that into my mass storage device drive here.
+I'm going to bring up Putty.
+Connect to Comm7.
+Sure enough, this release profile still works.
+It's printing hello out over the serial port over USB.
+We now have a decent template to start tinkering with other embedded features.
+Toggling a pin and writing information out over the serial port, especially USB, is a great start, and it helps us debug future programs.
+If you'd like a challenge, see if you can modify our USB Serial program to capture any characters it sees over serial, convert them to uppercase, and then print them back out over the same port.
+Feel free to keep the hello text printing every second.
+Before the next episode, I highly recommend reading Chapter 4 in the Rust book.
+It goes into great detail about how the ownership model works.
+Take your time with this one, as there's a lot to unpack.
+I also recommend doing the primitive types and move semantics exercises in Rustlings to test your knowledge.
+Next time, I plan to spend some time talking about the ownership model and how to write code that passes the borrow checker.
+We won't actually do any embedded work, but I think it's important to understand how to work with Rust rather than fighting it.
+See you then.

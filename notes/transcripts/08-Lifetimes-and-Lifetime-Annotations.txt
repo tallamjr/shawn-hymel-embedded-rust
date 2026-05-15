@@ -1,0 +1,321 @@
+The borrow checker in Rust makes some assumptions about how long references live in structs or after being returned from a function.
+Mostly it's there to prevent memory safety violations like a double free or a use after free.
+But sometimes it can get a little confused and we need to help it out a little.
+That's where lifetime annotations come in.
+In the last episode, we successfully wrote our own I squared C sensor library using all of the knowledge we built up to that point.
+Now we're going to cover something we have not seen yet, but still equally important.
+You'll come across lifetime annotations in many libraries and you'll likely start using them yourself as you dive deeper into embedded Rust projects.
+A lifetime is a measure of how long a reference is valid.
+Let's take this piece of code for example.
+Here we've annotated the lifetime of the reference R as tick A.
+In a new scope, we introduce the value of X and set R as a reference to X.
+We'll call this scope tick B.
+As we've discussed before, once a value goes out of scope, it is dropped.
+Any references to that value become invalid.
+Since X goes out of scope, the data is dropped.
+If we tried to use R by, say, printing it, this would try to reference out of scope data, also known as a dangling pointer.
+In fact, this code does not compile in Rust.
+It's just to help you understand how we can have different scopes and lifetimes and how Rust tries to prevent some pointer errors.
+Now let's look at another snippet.
+We'll use the sensor reading dummy struct that we saw in a previous episode so we can avoid using things like strings in the standard library.
+While the compiler can compile this function, it treats function calls as black boxes.
+In main, when it sees the return value of the add1 function being assigned to the another ref variable, it does not dive into the add1 function to figure out what that value refers to.
+So we need to help it out by annotating the function signature with the intended lifetimes of the parameters and return values.
+Otherwise, the compiler would not know when the underlying value that another ref points to might disappear.
+For all it knows from just the signature, the function could be returning a reference to some local variable in the function that gets dropped immediately.
+So let's see how lifetime annotations help solve this problem.
+To start, let's create a new project in apps.
+We'll call it lifetime examples, dash dash bin for binary or executable and set version control to none.
+We won't be doing anything with embedded so we can go into our lifetime examples.
+We'll leave cargo dot Tommel alone and open up main dot RS.
+As we did previously in the ownership model episode, we will be using this sensor reading struct.
+So that way we are not creating anything on the heap.
+We can demonstrate this all with structs in the stack.
+We declare a lifetime annotation after the function name like this.
+Note that this is a type of generic.
+So the syntax for it is just like you would expect for generics.
+Within the angle brackets, we'll put the lifetime annotation.
+Now, lifetime annotations start with this single quote, also known as tick.
+So this would be tick A.
+By convention, these are listed in increasing alphabetical order starting from A and lowercase.
+So you would have tick A, tick B, and so on.
+Just like we did with generics, we first declare that we're going to be using a particular generic or lifetime in this case.
+And that comes right after the function name.
+Then we use it in the parameters or return types.
+So in this case, the parameter will be reading.
+That's going to be a mutable reference.
+But we give it the lifetime annotation here of tick A just after the ampersand.
+And to show the lifetime annotation for the return type, once again, it's tick A right after the ampersand.
+So we'll say ampersand, tick A, mute, and then sensor reading.
+This is the return type.
+Note that we are not modifying a lifetime here.
+That's a very important distinction.
+This is only helping the compiler understand our intentions with the lifetime of these references.
+So in our function, we're just going to increase the value of the reading by one and then return reading.
+Let's create our demo to test this.
+We're going to create a sensor reading with value of one time stamp of 101.
+Make that mutable so we can actually change it and set that to the reading variable.
+We'll then pass in a mutable reference to reading to add one and set the output of that to another reference.
+So remember that in our function add one, we are increasing the value in the original struct and then returning a reference.
+So then we need to put that reference somewhere.
+This obviously isn't a very good function, but it is demonstrating how we can use lifetime annotations.
+We'll then print value and timestamp in another ref, noting that this is a reference and the actual values underneath have changed.
+So just to see that, we'll add another println underneath it and print out reading.
+Remember that this counts as a mutable reference because we are returning a mutable reference.
+The mutable reference should go out of scope here, and we should be able to use an immutable reference here to do the printing.
+All right, save this.
+Let's build and run it.
+Sure enough, we get it printed twice, and that is because we have changed the underlying value within sensor reading.
+So as the compiler is going through this, it sees where this function is called.
+It treats this function as a black box looking only at the signature.
+It does not dive into the contents of the function to figure out what we're trying to do.
+The borrow checker and the compiler looks at this function separately when compiling a bytecode for it.
+So it can see that we are indeed returning this reference here and that it aligns up with our annotations like this.
+But when it's calling the function, it doesn't look into the internals of the function.
+It just sees the signature.
+It sees that the lifetime tick A is the same for the reading that's being passed in as well as the return reference that's coming out of the function.
+So because that tick A annotation is present, it knows that the lifetime of the return value, which is going to be assigned to another ref, is at least as long as the lifetime of reading.
+So it treats this as a black box.
+It sees where the lifetime of reading is in this main function.
+And it knows that another ref has to have at least that lifetime according to the tick A lifetimes given here because this lifetime tick A is the same as this lifetime tick A.
+And then it verifies that you are holding true to that promise when it compiles this function separately.
+Now, this is the explicit way of doing this.
+The compiler is also quite smart and understands you are returning essentially the same reference so it can infer the lifetimes.
+So when it's looking through and compiling this function, it sees that, oh, you are basically returning the same reference.
+I know what you're trying to do with these lifetimes.
+Let's comment this out and demonstrate how elision works in Rust.
+The compiler has a set of elision rules that it follows to try to infer lifetimes.
+So we can write the same function without explicitly calling out the lifetime annotations.
+So we've left off tick A. The rest of the function will operate just the same.
+One of the rules, for example, is that if there is one input lifetime parameter, so like we've got tick A here, the compiler will try to automatically assign that to the output lifetime parameter.
+So if you only have tick A, it's going to try to assume that you want to return that same reference.
+And it checks to verify that you are indeed returning that reference when it compiles that function.
+In this case, that rule works.
+As a result, we don't need to manually assign lifetime annotations here for this particular function and ones like it where we've only got that one input lifetime annotation and it matches up to the output type lifetime annotation.
+So you're returning essentially the same reference.
+There are some other elision rules.
+We won't go into those details because you can always be explicit with your lifetimes.
+But note that when you come across something like this and you wonder, huh, how are you returning a reference without specifying a lifetime parameter?
+Note that the elision rules are taking effect and the programmers relying on the smart compiler to figure out the lifetimes that are involved.
+Let's save this.
+We'll run it again and you can see it operates exactly the same.
+All right, let's highlight this and go on to the second example.
+Now let's create a simple highest valve function and this is going to return a reference to the sensor reading with the highest value.
+So we take in two immutable references for sensor readings.
+That's R1 and R2 and we're going to return whichever reference happens to have the highest value.
+So that's just a if R1 value is greater than R2 value return R1.
+I'm not going to deal with when they're equal.
+We'll just say return R2 if they are.
+And if R2 is greater also return R2.
+And remember these are references we're dealing with here.
+All right.
+Knowing what we've seen before about lifetime annotations and lifetimes.
+What can we assume about the lifetimes of R1 R2 and the returned reference?
+Well, the elision rules don't actually work very well here because there's not one lifetime assumed for R1 and R2.
+So it doesn't quite know what the lifetime should be of the return value because this is going to be determined at runtime.
+Is the lifetime of the returned reference the same as R1 or is it the same as R2?
+The compiler doesn't know because that's a runtime problem.
+So what happens if we run this?
+So if we save it, run it, we get some errors.
+And here we see that it is indeed missing a lifetime specifier because the elision rules don't work and it needs explicit lifetime annotations.
+Let's make a note here.
+If you look at the errors, you can see it giving you a hint about what it recommends for those annotations.
+So let's comment out that function and create our fix.
+I'm just going to take this function, drop it in here uncommented out.
+And the only fix we need to make is to actually add those explicit lifetime annotations where we declare tick a as a generic.
+So that's our lifetime that we're going to be using.
+And you can define multiple in here.
+So you could have like comma tick B and so forth.
+And after the ampersand to denote that this parameter is a reference, we're going to say tick a.
+So that's the lifetime of the incoming parameter or that first one.
+We're going to say tick a after the second ampersand.
+So both r1 and r2 are assumed to have the same lifetime, which means that we can assume that the output also has the same lifetime.
+Again, this means that we're telling the compiler that the output reference will live at least as long as the lifetime of tick a,
+which is the same lifetime as the incoming parameters r1 and r2.
+So let's save that.
+We'll run that again.
+And sure enough, it works this time, giving us the highest value in whichever reading that is.
+All right, let's move on to number three.
+So we will delete these.
+Thus far, we've only really worked with structs that directly held values.
+Note that structs can also store references like we're doing for this sample holder here,
+where we have one value in there called sample.
+And that holds a reference to a sensor reading, which is another struct or a reference to another struct.
+However, this carries with it some risks as if the value of sensor reading is dropped,
+you could have this sample holder pointing to a chunk of memory that might have already been freed or changed by something else.
+So let's see what happens when we try to use this.
+We're just going to create a very basic reading from sensor reading.
+And then we're going to create a holder, which is just a wrapper that holds a reference to reading.
+And we're going to set the sample in there to the reference of reading.
+Then we're going to print out the value and timestamp like we've been doing.
+But to get that from holder, we'll say holder dot sample dot value and holder dot sample dot timestamp MS.
+This allows us to reach into the reference held by holder and get the individual values from value and timestamp.
+Let's save this and then let's try running it.
+And you can see we've got an error.
+The compiler needs to ensure that the data referenced by this value held in sample holder lives at least as long as the structure.
+itself similar to what we saw with functions.
+The compiler treats this struct separately.
+And so while it will look inside of this when compiling, it doesn't quite understand that when we're using it,
+it won't dig into the middle here of sample holder to verify that sensor reading is living at least as long as the struct itself.
+So it doesn't know that when we're using it.
+So we have to help it out with lifetime annotations.
+So we're going to list the error here so you can see what's going on.
+I'm going to copy this.
+I'm going to comment it out so it lives here so you can use it as a reference.
+And we're going to paste it here, but add our lifetime annotations.
+So after the name of the struct is where we give the annotation.
+So this is tick a.
+So the lifetime of sample holder is the same as the reference to sensor reading.
+So we add tick a just after the ampersand.
+So we're saying here in essence, the reference sample must live or be valid for at least the same lifetime or longer of tick a.
+And that includes any instance of sample holder.
+It cannot outlive that lifetime.
+So this just helps the compiler with this signature when we're creating instances of the structs here.
+Let's save that.
+Let's run it again.
+And sure enough, we actually run this time.
+All right, let's go on to number four.
+Let's say we have some sort of buffer that holds multiple sensor readings.
+So again, as you saw earlier, we need to have a lifetime annotation here of tick a because we're going to be holding references.
+That sensor buffer will give it a name just as a demonstration here.
+And then we'll have an item called readings that will store an array of sensor reading references.
+Again, these are references.
+So we need to give it a lifetime annotation and we'll use tick a here as well.
+So name and readings must all outlive their references held by sensor buffer.
+Let's implement some methods that go along with this sensor buffer struct.
+The first is this function new.
+This instantiates a new instance of sensor buffer will pass in a string slice and will also pass in a reference to an array of readings.
+It will return self, which is a sensor buffer.
+So all we have to do is fill out that sensor buffer and return it.
+The other method will be get latest.
+So this will get the latest reading from that array.
+So it will take a reference to itself, return a reference to a sensor reading.
+All we need to do is return a reference to self.
+So that sensor buffer dot reading.
+So now it's a reference to readings and then we index to length minus one of that readings.
+So that should be the last element to demonstrate this.
+Let's create an array of readings.
+So we'll just initialize all of those sensor reading value.
+23 timestamp of 104.
+The next element will have a value of 25 timestamp 204 and the third reading will have a value of 21 timestamp 304.
+These are just made up numbers and we can just pretend we're reading in values from some kind of sensor and timestamping it.
+Then we'll create a new sensor buffer by calling that new function.
+That's in sensor buffer.
+We'll give it a name.
+My readings.
+This is a string slice that gets saved to that sensor buffer.
+And then we will pass in a reference to that array that we just created.
+Then we'll get a reference to the latest reading from that array by calling buffer dot get latest.
+And that will call the method we just implemented.
+Then we'll print the name of the buffer and the latest value and timestamp that we just got.
+Let's save that.
+Now, do you think this is going to run or fail the compiler?
+All right, let's give it a shot.
+Oops.
+Let's try cargo run instead of just cargo.
+And we did fail.
+First of all, let's correct the syntax error of adding a semicolon.
+Run again.
+And here we go.
+Expected lifetime parameter.
+Note that the elision rules we saw earlier do not work here.
+So the compiler cannot figure out how to implicitly annotate all of our methods and implementation,
+which means we have to do it manually.
+Let's make a note about the error.
+I'm going to copy this.
+I'm going to comment it out that you can keep it as a reference.
+I'm going to paste it down here.
+And we're going to fix it by annotating.
+So even though we have declared our annotation up here for the struct,
+we need to also declare it for the implementation of our methods.
+That means we will declare the lifetime here and declare it here.
+Then we can use it throughout our method signatures.
+So for the string slice, because that is a reference,
+we'll say that this has the same lifetime as the one we declared up for sensor buffer.
+Same thing for the reference to the array.
+We don't need to annotate the reference to self because that's part of sensor buffer.
+And the compiler knows that this is all part of the same thing and has the same lifetime.
+But because we are returning a sensor reading,
+which is something in self or inside the sensor buffer,
+we do need to annotate that because that aligns with the lifetime annotation we gave for the values inside of the sensor reading array here.
+So we give it tick A.
+Now let's save that, see if that runs.
+Sure enough, my readings latest is given by 21 and 304,
+which is the last element of this array, just like we expected.
+Okay, so this covers the basics of using lifetime annotations.
+I want to talk about a special one known as the static lifetime.
+Let's create a new struct here called sensor config.
+And in fact, we won't need sensor reading for this example.
+So let's just keep this even simpler.
+We've seen the const keyword used before, for example, to declare the clock speed at the top of our program.
+Note that the compiler in lines this at every use.
+So every time you saw that clock speed, it would essentially just replace it with that actual value statics.
+On the other hand,
+tell the compiler to just keep one instance in memory and then go fetch that or go look that up as needed.
+So we can have something like a struct here that just kind of stores various constant values for us.
+So we have our temperature sensor config.
+This is of type sensor config, which we just created above.
+And we're going to fill this out.
+It will have a name temperature sensor in units C.
+So this might be a configuration that you use at the top of your code or in a different file.
+And this stays the same throughout the entire lifetime of the program.
+Now let's save this.
+We'll run it.
+And I forgot to add a semicolon because when you define a struct, unlike you're declaring it here, you do need a semicolon.
+So let's save that run it.
+And this does indeed work.
+It prints out the information here.
+So while it works, the compiler makes some inferences here.
+There is a special annotation called tick static.
+The compiler sees this struck definition.
+We're only using this struct to store that static information we defined in the next section.
+So it infers that tick a is actually tick static, which means that it's being used to hold static data and static data lives for the entire lifetime of the program.
+So sometimes you'll run across take static, which tells the compiler that it's holding data for the entire lifetime.
+So let's highlight this and comment it out.
+We don't need to put tick a here.
+We just replace tick a with static.
+So that tells the compiler that the information that's inside of these references can be expected to live for the entire lifetime of the program.
+They're not going to go out of scope, so we don't need to declare a separate lifetime annotation for this struct like we would when we were doing custom annotations earlier.
+So this information does not change.
+We declare it outside of same main.
+It is constant static data and that data lives in that struct forever.
+So you will sometimes come across these tick static keywords.
+It just means that it's holding data for the lifetime of the program.
+So let's save that run it.
+And you can see sure enough, it does work after declaring the lifetimes of name and units to be static.
+Hopefully this gives you a basic understanding of how lifetime annotations work in rust.
+We'll run into them again and you'll likely see them as you read through various crate documentation.
+For the next episode, I recommend reading chapter 11 in the rust book, which talks about creating automated tests.
+You should also work through the tests section in rustlings if you want to be really prepared, because next time we're going to dive into test driven development and how to write automated tests in rust.
+When it comes to writing libraries and applications, this can help you find bugs early and save you tons of time down the road.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.
+Happy hacking.

@@ -1,0 +1,1959 @@
+Rust is a programming language like C, C++, Python, Java, and so on.
+It was built as a systems language with a focus on safety and speed.
+As a result, it is a natural fit for embedded systems with a few caveats that we'll look at.
+The goal of this series is to get you up and running with Rust on embedded systems,
+which means learning a new language while learning the basic constructs for writing
+small, efficient microcontroller code.
+If you want to simply jump in and get your hands dirty, feel free to go to the end of this episode
+where we set up the Docker image and build Hello World before skipping to the next video
+where we write a basic blinking LED app.
+Let's see what we'll cover in this whole series.
+I would not recommend jumping into this series if it's your first time with embedded systems,
+as Rust is still relatively new and can be tricky to get working with microcontrollers.
+You also have to learn a new language on top of learning the embedded parts,
+and I will honestly say that Rust has a steeper learning curve than, say, Python.
+So it helps if you have some experience working with microcontrollers.
+That might mean you're comfortable with Arduino, MicroPython, or CircuitPython.
+Even better, you've made some projects in C or C++ with silicon vendor tools like STM32 or ESPIDF.
+You should understand some memory management concepts like stack versus heap and how pointers work in C.
+Rust builds on these concepts with its ownership model,
+so it helps to be familiar with them before tackling Rust.
+If you've worked through either my Getting Started with STM32 series or my Introduction to RTOS series,
+you're probably ready to tackle embedded Rust.
+I don't want to spend the whole series just talking about the language,
+and I don't want to assume you're already familiar with the language to just focus on the embedded side.
+So I'm going to do a mix of the two.
+I'll assume you're familiar with some embedded concepts but probably haven't used Rust yet.
+So in between some of the episodes,
+I'll recommend that you read parts of the Rust book and try some hands-on exercises to get familiar with the language.
+That way, we can focus on the embedded stuff in the videos while learning Rust at the same time.
+The Rust Programming Language, also lovingly known as the Rust Book or just the book,
+is the official online guide for learning Rust.
+It's maintained by the Rust team,
+and in my experience, it's the best guide for understanding the language.
+Even better, Brown University maintains an interactive version with quizzes to test your knowledge.
+I actually recommend working through that version,
+but just be aware that some of the quiz questions can be quite tricky.
+In between some of the videos,
+I'll recommend reading certain chapters from this book,
+as we'll build on the knowledge from them for the following episode.
+While I'll describe a number of the concepts in the videos,
+know that this book goes into a lot more detail,
+which allows me to focus on the embedded side of things in those videos.
+For example, I might say,
+read chapters 5 through 9 before an episode
+where we start working on our own I2C driver.
+That way, you have some familiarity with the concepts
+like structs, enums, and error handling
+before seeing an example.
+Just so you know,
+I'll be using the 2024 edition of Rust
+and the 2024 edition of the book for the series.
+In addition, I'll also recommend working through a few hands-on examples
+using the Rustlings framework.
+I'll make sure it's pre-installed in the Docker image
+so you can start right away.
+While the book talks about the language from a conceptual perspective,
+the exercises in Rustlings are great
+for trying your hand at actual implementation and debugging.
+It's the perfect companion to the book,
+and like with the recommended chapters,
+I'll also recommend groups of Rustlings exercises
+to perform prior to the next video.
+Let's talk about what we'll cover in this series.
+My goal is to introduce the Rust language piece by piece
+while also giving you the building blocks
+needed to start creating your own embedded projects.
+To do that,
+I'll interleave embedded examples with non-embedded examples
+while also recommending various chapters from the Rust book
+to read in between episodes.
+In this episode,
+we'll look at the history of the Rust language,
+why you might consider using it,
+and why you might consider using it for specifically embedded systems.
+I'll also show you how to install the Docker image
+that goes along with the series
+should you wish to follow along with a unified development environment.
+We'll also run a simple Hello World program
+so you can see how to build Rust programs
+for computers with full operating systems.
+Before moving to episode two,
+I recommend reading chapters one, two, and three in the Rust book.
+That will give you an introduction to the language
+and cover some basic things like types, functions, and control flow.
+In the second episode,
+we'll create a simple blinking LED program.
+Note that there will be a lot of boilerplate code
+we need to write in episode two
+to get even a simple blinky program to run on our microcontroller.
+Don't worry if not all of it makes sense.
+We will build future programs on top of it
+that demonstrate concepts you read about in the Rust book.
+A similar kind of thing happens in the third episode.
+We will use some available libraries
+to pipe data out over serial via USB.
+This will make debugging much easier going forward
+without relying on a separate piece of hardware
+like the Raspberry Pi debug probe.
+Where possible, in these three episodes,
+I'll point out Rust concepts that you read about
+in the first few chapters of the book.
+But the main intention is to get a template
+that we can use to build demos going forward.
+Note that this is all done with bare metal programs
+and some third-party libraries.
+I found that frameworks like Embassy
+rely on more advanced Rust concepts to even start using,
+so we save that for the very end of the series.
+I recommend reading chapter four in the book
+before the fourth episode,
+where we'll talk about the main ownership
+and borrowing rules in Rust.
+As with the original Hello World example,
+we won't touch embedded code here,
+but I still think it's important to review these rules
+as they can be tricky to grasp.
+From there, you should read chapters five through nine
+as they go into structs, enums,
+managing crates, and error handling.
+We'll see some of those in use
+as we create a basic I squared C driver
+to read from a temperature sensor in the fifth episode.
+Then, I recommend reading chapter 10, parts one and two.
+These cover generics and traits,
+which we'll review in episode six.
+We'll just look at some very simple Rust examples here
+that aren't necessarily unique to embedded code.
+Then, in episode seven,
+we'll wrap up our I squared C sensor driver
+into a library that you can import
+into your various applications.
+After that, I recommend finishing chapter 10,
+which talks about lifetimes.
+We'll cover some basic non-embedded examples.
+Chapter 11 of the Rust book
+talks about writing automated tests,
+which we'll review in episode nine
+and discuss how that can apply to embedded systems.
+At this point, you should have a decent working knowledge
+of the Rust language
+so we can dive into a few embedded specific concepts
+for the rest of the series.
+You're welcome to finish the book at this point,
+but we won't need it for the final few episodes.
+In the 10th episode,
+we'll look at handling hardware interrupts.
+In episode 11, I'll show you how to use
+the Raspberry Pi debug probe and GDB
+should you wish to use some more advanced debugging techniques
+in your project.
+Finally, we'll end with an example
+of how to create asynchronous tasks
+with the Embassy framework.
+Embassy comes with its own hardware abstraction layer,
+so all of that boilerplate and template code
+we wrote earlier won't help much here.
+But I found that using even basic functions in Embassy
+required a decent working knowledge of Rust.
+As a result, I recommend learning Rust
+with bare metal programs first
+before jumping to a framework like Embassy.
+That being said, I really do like Embassy,
+and once you try it,
+you may not want to go back to bare metal.
+Now, let's get started.
+Personally, I like knowing a little about the history
+to get a better understanding
+of why you might want to use something.
+So let's take a moment to learn how Rust came into being.
+To understand the reasoning behind Rust,
+let's look at a simple C example.
+If you've worked with C or C++ for a while,
+can you spot the issue?
+This seems pretty straightforward.
+We allocate a piece of memory on the heap
+to be the size of an integer.
+We then tell that memory to hold the value of 42.
+We might then do something with that value in our code.
+Later, like a good C programmer,
+we free up that piece of memory.
+If we didn't,
+we might inadvertently create a memory leak
+where you continually allocate memory without freeing it.
+This is also bad,
+as the program will just continue to consume
+more and more of your computer's memory
+until it eventually crashes.
+However, the issue comes in
+when we try to access that piece of memory later
+in order to, say, print it out.
+This is undefined behavior in C,
+which means that the language specification
+makes no guarantee about what will happen
+when this is compiled and run.
+It might print the original value
+if that chunk of memory was not overwritten by something else,
+or it might print something else
+if that memory was overwritten,
+or it might just crash the whole program.
+That's the idea behind undefined.
+The language itself makes no promises
+as to what happens in certain situations like this.
+Some compilers might catch it,
+but more often than not,
+you can spend hours debugging tricky runtime errors like this.
+Or worse, you ship the product
+and it randomly crashes for users
+or exposes nasty vulnerabilities for people to exploit.
+Microsoft estimated that some 70% of all security bugs
+are related to memory safety issues.
+This was exactly the inspiration
+that led Graydon Hoare to create Rust in 2006.
+While working at Mozilla,
+he noticed that the software running the elevator
+in his apartment building kept crashing,
+which required repeated visits from the maintenance crew.
+So he began creating a new programming language
+as a personal project.
+He hoped to prevent these types of runtime memory bugs
+by designing a language and compiler
+that explicitly prevented them
+without compromising on execution speed.
+He named the language Rust after a group of fungi
+that he said are over-engineered for survival.
+Graydon worked on the project for about three years
+before Mozilla took enough interest to officially sponsor it.
+They even placed a few developers on the project full-time
+as they bought into the vision of a memory-safe, fast language.
+By 2010, the ownership system was fully established.
+This is something we'll examine in depth in a later video
+as it can be tricky for newcomers.
+The official Rust logo, an R surrounded by a bicycle chainring,
+was designed in 2011.
+The original Rust compiler was written in OCaml.
+By 2012, the team had fully rewritten the compiler in Rust,
+which makes it a self-hosted compiler.
+This coincided with the version 0.1 release of Rust.
+While Rust originally had a garbage collection system,
+it was used less and less.
+By 2013, the team fully removed the garbage collection system
+from the language and enforced the ownership system
+as the primary means of ensuring memory safety.
+Hoare also stepped down that year
+to let a more organic governing system evolve.
+Version 1.0 was released in 2015,
+which focused on stabilizing the core features
+and ensuring some level of backward compatibility
+with future releases.
+Due to the economic downturn from the COVID pandemic,
+Mozilla laid off some 250 employees
+and disbanded the team working on Servo.
+This was Mozilla's experimental browser engine
+written in Rust.
+This cast doubt on the future of Rust as a language.
+Luckily, the Rust team was able to generate
+enough interest in Rust that a full foundation formed in 2021,
+consisting of Amazon Web Services,
+Google, Huawei, Microsoft, and Mozilla.
+The Rust Foundation provides funding and oversight
+for the various Rust teams
+who implement and maintain various parts
+of the language and associated tool chains.
+As you can see, Rust has been around for a while,
+and it's still quite actively maintained.
+Let's examine a few reasons you might consider using Rust
+in your next project.
+We'll start by taking a look at how Rust provides
+memory safety assurances while maintaining execution speed.
+In general, most programming languages make a trade-off
+between two different memory management strategies.
+The first is manual memory management.
+Older, lower-level languages like C and C++
+force users to allocate and deallocate memory manually.
+On the plus side, this usually means faster runtimes
+as there is no overhead for these kinds of operations.
+It also means predictable performance
+as what you write is what gets executed
+with some assumed compiler optimizations.
+It also means that your program sizes could be quite small
+as there was no extra overhead for memory cleanup.
+This is why such languages, specifically C,
+are the most common in embedded systems.
+However, programmers need to know exactly what they're doing
+as it's easy to create memory leaks
+or undefined behaviors in programs.
+To afford this kind of low-level control,
+such languages are often quite verbose,
+and developers need to track and debug memory allocations
+and deallocations, adding to development time and complexity.
+This means writing such programs can be slow and painstaking.
+Higher-level languages like Python, Java, and JavaScript
+attempt to address these potential memory bugs
+by adding something called the garbage collector.
+This is a system that runs automatically with your code
+to track memory allocations
+and freeze up any memory that is no longer used.
+It's usually implemented as a separate thread
+or concurrent task that runs periodically
+and is often invisible to your code.
+It promises much better safety
+with fewer or no undefined behaviors
+when it comes to memory issues.
+Languages that use a garbage collector
+can often abstract away memory management
+so developers can focus on higher-level concepts.
+This means that such automatic cleanup
+can afford faster development times.
+However, this all comes at a cost.
+The garbage collector has overhead,
+both in runtime speed and creating a larger program size.
+It must periodically run, which costs processor time,
+and it's often difficult to enforce
+a particular collection schedule,
+which might mean unwanted pauses in your program.
+You also lose out on low-level memory control,
+which some programmers often want
+for low-level system development,
+like operating systems and microcontrollers.
+Starting in the late 90s,
+some companies, government, and academic institutions
+began introducing standards for low-level languages
+like C to enforce memory safety coding.
+The most popular is probably MISRA,
+which is used frequently in the automotive,
+aerospace, and medical industries.
+You might also come across CERT-C
+and ISO IEC TS 17961.
+These don't change the language or compiler.
+Rather, they provide a set of rules and guidelines
+that, if followed, can produce memory-safe code.
+However, they require teams and code reviews
+to ensure that such standards are followed.
+There are some tools that can check code for you,
+but it ultimately comes down to people enforcing the rules.
+For the longest time,
+manual memory management and garbage collection
+were the only two real paradigms
+for dealing with memory in the vast majority of languages.
+Rust provides a third option
+that it calls the ownership model.
+A few languages in the 90s and early 2000s
+introduced some early ownership concepts
+that became the basis for Rust's technique.
+These include the likes of Lolly,
+Linear Objects, ML Kit, and Cyclone.
+However, these languages were often relegated
+to research projects
+and never made it into the mainstream.
+This model offers essentially the same benefits
+of manual memory management
+with the addition of guaranteeing
+some level of memory safety.
+Programs written with this model
+are often smaller and faster
+than similar programs
+written with a garbage collection system.
+I say smaller overhead here
+because Rust has a few minor runtime checks,
+like checking for out-of-bounds array accesses
+that introduce a slight runtime overhead.
+The downsides include slower development time
+due to the added complexity
+and the learning curve.
+I'll say that Rust is harder to learn than C
+as you need to understand
+how the borrow checker system works
+with the compiler
+to enforce ownership in your code.
+So what is this ownership model?
+Rust has three basic rules
+when it comes to ownership.
+The first is that each value in Rust
+has a variable that acts
+as the owner of that value.
+The second is that there can only be
+one owner of a value at a time.
+And the third is when the owner goes out of scope,
+the value will be dropped.
+Let's look at a brief example in Rust.
+On the first line,
+the string hello is created on the heap
+and assigned to the variable S1.
+At this point, S1 has ownership of the value hello.
+Then we perform an ownership move on the second line.
+At this point, S2 is now the owner.
+If we try to print S1,
+the compiler would catch this
+and flag it as an error
+as S1 is no longer an owner of anything.
+But we can print the contents of S2
+as it is now the owner of the string.
+With this type of ownership enforcement,
+if we dropped or modified S2
+after the reassignment,
+the shared piece of memory
+referenced by S1 would change.
+This is known as a dangling pointer.
+In another language,
+S1 would still be a valid variable
+pointing to some now freed
+or modified piece of memory.
+Trying to print it
+might produce some unwanted behaviors
+or open a security vulnerability
+like printing sensitive information
+that now resides in that section of memory.
+Let's say we wrap this snippet up
+into a tiny function called say hello.
+To address the third rule,
+we see that S2 would go out of scope
+after the function ends.
+As a result,
+Rust automatically drops the string value
+it owned and frees up the memory.
+This incurs a small amount of overhead
+to actually free the memory
+and that's invisible to the developer.
+You do not have to manually call
+a free or drop function.
+This usually takes only a handful of clock cycles.
+Note that the standard library
+that comes with Rust
+is not completely deterministic
+for some overhead tasks
+like this cleanup,
+but you can create your own allocators
+or avoid heap allocation
+if you need hard real-time systems
+with complete determinism.
+This is just a very basic explanation
+of how ownership works in Rust
+so you can start getting familiar with it.
+Things get more complicated
+when you start talking about references
+and borrowing.
+We'll spend an entire episode
+looking at ownership and borrowing,
+so don't worry if it's not quite making sense right now.
+While Rust is a general purpose programming language,
+you'll often hear it advertised
+as a systems language.
+As we saw,
+it offers manual memory management
+which allows for direct hardware control.
+You'll see Rust also offering
+zero cost abstractions,
+which means that high level features
+and libraries compile down
+to efficient machine code.
+The lack of garbage collection
+means that performance is fast and predictable,
+and it has support for inline assembly code
+when you need to write something optimized
+for a particular CPU architecture.
+That means it's a good fit
+for writing low-level operating system kernels,
+hardware drivers, game engines, web servers,
+and as we'll explore in this series,
+applications for embedded systems.
+Even though Rust has been around
+for just about 20 years,
+it has only now just started gaining
+some adoption in various industries.
+If we look at GitHub's language popularity chart
+based on the total count of unique developers
+making at least one Git push for a language,
+we can see that Rust has gone
+from rank 35 to 21 in about five years.
+That's a pretty impressive climb.
+We can also get a listing of companies
+that have begun adopting Rust
+for official projects.
+Notably, this includes things like
+AWS Firecracker,
+Microsoft's Azure IoT Edge,
+and some of BlackRock's projects for fintech.
+Tailscale, Bitwarden, and 1Password
+have started using it on some of their products.
+You'll also find it being used on new projects
+in the automotive, aerospace,
+and consumer electronics industries.
+Rust is also being integrated
+into the Linux kernel
+for writing device drivers
+and kernel modules
+as a second option to see.
+Microsoft is proactively rewriting core components
+in Rust to replace legacy C++ code.
+This is all very impressive,
+but what about for embedded systems?
+I mean, that's why you're watching this series, right?
+As you're probably aware,
+the embedded world moves much slower
+than the rest of the computing world,
+and as you can guess,
+Rust adoption is a bit slow.
+But it is happening,
+even if it's mostly community-supported projects right now.
+For example,
+a talented group of developers
+are adding Rust support
+to STM32 microcontrollers.
+ST has even started to offer
+official drivers written in Rust.
+ESP32 support is also mostly community-driven,
+but it does have some official support by Espressive.
+Raspberry Pi's RP2040 and RP2350
+actually have impressively robust Rust support.
+While it's technically a community project,
+RPHAL has strong unofficial endorsement
+from Raspberry Pi.
+If you'd like to hear it from the man himself,
+here's Eben Upton,
+the CEO of Raspberry Pi Holdings,
+to tell you his thoughts on Rust.
+Hi, I'm Eben from Raspberry Pi.
+It's wonderful to see Sean
+putting together this embedded Rust series,
+and we're delighted that he's chosen
+Raspberry Pi Pico 2
+as his demonstration board.
+Rust offers some significant advantages
+for embedded development,
+particularly in areas of security and reliability.
+The built-in memory safety features
+prevent entire classes of bugs
+like buffer overflows
+and null-pointer dereferences
+that can cause serious issues
+in production systems.
+With embedded devices
+becoming increasingly sophisticated
+and increasingly connected,
+this is more important than ever.
+What's particularly nice about Rust
+is that you get these safety benefits
+without any performance overhead.
+Zero-cost abstractions
+and predictable behavior
+exactly what you need
+for real-time embedded applications.
+The compiler catches many mistakes
+at compile time
+rather than letting them
+become runtime problems,
+which is incredibly useful.
+Raspberry Pi Pico 2's
+dual Cortex-M33 cores
+work very well with Rust,
+and we put a lot of effort
+into providing comprehensive tooling
+and comprehensive documentation.
+And we've been collaborating closely
+with the Embedded Rust community
+to make sure everything works properly.
+Thanks to Sean and the DigiKey team
+for creating this educational content.
+We're excited to see
+what you build with it.
+Because of this backing and maturity,
+we'll actually be using
+the RP2350 in this series.
+It makes the experience
+of developing Embedded Rust
+much more enjoyable.
+I want to give a special mention
+to the Zephyr project.
+They recently started adding Rust support
+to Zephyr, which means
+you'll soon be able to write
+Rust applications on top
+of the Zephyr real-time operating system,
+even though that's written in C.
+Rust in Zephyr is still new
+and only supports
+a few target architectures
+at the moment.
+But the promise of being able
+to write cross-platform Rust applications
+for a wide variety of microcontrollers
+is quite enticing.
+After all that,
+Rust sounds pretty amazing, right?
+Well, it's not without a few limitations
+that you should be aware of.
+First, Rust is a good deal
+more complex than, say, C.
+As a result,
+it can take some time
+to wrap your head around
+some of the syntax
+and features like the borrow checker.
+Because Rust is strongly typed,
+it can be quite verbose,
+and you will often spend time
+debugging compile time errors
+to make sure your code
+passes the borrow checker
+to be memory safe.
+This means that development time
+can be slower
+than with other languages.
+Rust also has notably
+longer compile times
+than other languages
+due to the borrow checker
+doing extra work,
+having to generate copies
+of generic code
+known as monomorphization,
+and dealing with traits,
+which is something
+we'll look at later.
+While Rust can create
+some impressively optimized programs,
+these longer compile times
+can be very frustrating
+when you need a shorter
+edit compile debug loop
+while writing code.
+And when I say optimized,
+I don't necessarily mean small.
+Rust boasts zero-cost abstractions
+and fast runtimes,
+but a few aspects of the language
+means you can end up
+with large binaries.
+The first is that Rust performs
+static linking to libraries
+by default,
+which means all libraries you use
+get pulled into a single executable.
+This is opposed to dynamic linking
+where you can call functions
+in compiled binaries,
+think .so or .dll files.
+Monomorphization can bite us here too,
+as generating code from generics
+means, well, more code.
+And like C++,
+Rust has a standard library
+that contains a lot of functionality,
+but it can add some bloat
+to your application.
+Luckily, these aren't a big deal
+in embedded systems,
+as we usually assume
+static linking anyway,
+and we won't be using
+the standard library,
+as it's often too big
+and complex for microcontrollers
+and assumes you have
+an underlying operating system.
+Monomorphization
+can still be an issue,
+so keep that in mind
+when we look at generics
+in a later episode.
+An Application Binary Interface,
+or ABI,
+is the low-level specification
+that defines
+how compiled code components
+communicate with each other.
+This includes calling functions
+in other libraries,
+how are parameters passed in,
+and how data structures
+are laid out.
+Note that ABIs
+are specific to individual CPU
+architectures
+and operating systems.
+C has a widely adopted
+stable ABI,
+which means other languages
+can call libraries
+written in C
+through C bindings.
+It's one of the many reasons
+C is so widely adopted
+for things like
+operating system kernels,
+drivers,
+and system libraries.
+The Rust team
+has not standardized
+Rust's Application Binary Interface yet,
+which means programs
+written in other languages
+cannot call Rust code directly.
+To work around this,
+Rust libraries
+must expose
+a C-compatible interface
+to be callable
+from other languages.
+This limits Rust's
+ecosystem growth,
+as developers want
+to be able to call Rust libraries
+from a wide variety
+of languages.
+That being said,
+if we're sticking
+to purely embedded Rust
+in our applications,
+we don't need to worry
+about this too much.
+It only comes into play
+if we're writing code
+in other languages
+for things like
+bootloaders
+or real-time operating systems
+and want to call Rust code
+from other languages.
+Speaking of embedded Rust,
+let's look at a few limitations
+that apply mostly
+to the embedded side.
+Using Rust for embedded systems
+is relatively new,
+which means board support
+and libraries
+are still mostly
+community-supported
+and immature libraries
+can have breaking changes
+from one version
+to the next.
+Luckily,
+the cargo system
+that comes with Rust
+can help a lot
+to manage dependencies
+and versions.
+Because Rust
+is still relatively new,
+there is very little adoption
+by silicon vendors,
+which means you won't find
+much official support
+on various microcontrollers.
+The exceptions
+are Raspberry Pi,
+Espressif,
+and ST Microelectronics,
+as we saw earlier.
+They're slowly starting
+to support Rust.
+There's also limited drivers
+and libraries.
+You'll likely find
+that you'll need
+to rewrite C libraries
+for talking to things
+like sensors.
+Complex drivers
+like graphics,
+Wi-Fi,
+and TCP IP
+are also very new
+and likely buggy.
+While you might not need
+a real-time operating system
+for simpler projects,
+they are very popular
+in industry
+for handling complex workloads.
+Unfortunately,
+there's no mature
+RTOS for Rust yet.
+Your two big options
+right now
+are Embassy
+and real-time
+interrupt-driven concurrency
+or RTEC.
+Neither is a fully-featured RTOS.
+Embassy is an asynchronous framework,
+which means
+it doesn't really have
+preemptive scheduling
+like you might be used to.
+And RTEC
+is a concurrency framework
+that does provide
+preemptive scheduling,
+but it lacks a kernel
+and dynamic memory allocation
+that you'd find
+in a traditional RTOS
+should you need those.
+Both are very technically capable,
+but their ecosystems
+are still growing
+and lack industry adoption
+right now.
+Finally,
+as you can probably guess,
+there's a much smaller
+knowledge base
+and community support
+than you might find
+for Embedded C,
+which has been in use
+for decades.
+There's not a lot of hardware
+you'll need
+for this series.
+You should get
+a Raspberry Pi Pico 2
+or Pico 2W
+if you want to try
+Wi-Fi later
+after the series.
+You'll also need
+an LED,
+220-ohm resistor,
+a push button,
+and a TMP-102
+I2C temperature sensor
+breakout board.
+You'll also want
+a breadboard,
+some jumper wires,
+and a USB cable.
+That's it.
+Most of our work
+will be understanding
+how to build Rust applications,
+use Rust features
+like borrowing
+and generics,
+and creating some demos
+around quintessential
+embedded concepts
+like interrupts,
+debugging,
+and asynchronous execution.
+My hope
+is that these
+give you the building blocks
+and experience needed
+to start confidently writing
+your own
+embedded Rust applications.
+Now, let's see
+how to set up
+the pre-configured
+Docker image
+and build a simple
+Hello World application
+in Rust.
+Note that we won't
+even touch
+embedded Rust yet.
+We'll save that
+for the next episode.
+If you'd like
+to install Rust
+locally
+rather than use
+the provided Docker image,
+you're welcome
+to do so.
+Just go to
+the rustlang.org
+website
+and click
+install at the top.
+Follow the instructions
+to install Rust
+for your particular
+operating system.
+If you want
+to use
+the pre-configured
+Docker image,
+then you need
+to make sure
+that you have
+Docker desktop
+installed and
+running on your computer.
+Go to docker.com,
+click on
+download Docker desktop
+and choose
+your operating system.
+Follow the instructions
+to install
+Docker desktop.
+While you can
+edit the files
+mapped to the container
+using whatever
+editor you'd like,
+I highly recommend
+installing VS Code
+locally
+as that's what
+I'll be showing.
+To start,
+head to
+github.com
+slash
+Sean Hemel
+slash
+introduction
+to
+embedded Rust.
+This is a
+repository that
+contains the
+Docker file
+to build
+the image
+for us
+that we will
+use for
+development
+and it also
+contains a
+bunch of
+example apps
+that we're
+going to
+create
+throughout the
+series,
+our library
+and it will
+create a
+rustlings folder
+that you will
+see in a
+moment.
+Go to
+code
+and click
+download zip
+somewhere on
+your computer.
+Go ahead
+and unzip
+that once
+it's done.
+In a
+terminal,
+navigate into
+the introduction
+to embedded
+rust folder
+that you just
+unzipped.
+Make sure
+Docker desktop
+is running
+in the
+background
+and enter
+Docker build
+dash T.
+Give your
+image a name.
+We'll call
+it env
+embedded rust.
+I recommend
+using that
+name so
+that it
+lines up
+with the
+name that
+the VS Code
+dev containers
+extension is
+expecting.
+And then
+don't forget
+that period
+at the
+end which
+tells it
+to use
+the current
+directory
+as the
+context
+for how
+to build
+this Docker
+image.
+Give it a
+moment and
+let that
+build.
+You have
+two ways
+to interact
+with this
+image.
+The first
+way is
+to call
+this
+Docker
+run
+command.
+Give it
+dash dash
+rm to
+remove and
+clean up
+the container
+when you
+exit it.
+Dash
+IT for
+interactive
+mode.
+Then
+dash
+P to
+forward
+the port
+3000 to
+3000 on
+the host
+machine.
+The image
+comes preloaded
+with the
+Rust book
+in case you
+need it
+say on
+the road
+or flying
+and you
+don't have
+access to
+the internet.
+Also forward
+the port
+33033 which
+we will need
+for debugging
+later on in
+the series.
+We'll want to
+map the
+volume so
+with dash
+V give it
+the current
+working directory
+the workspace
+directory map
+that to
+home student
+workspace in
+the container
+and then
+let's make
+the working
+directory home
+student
+workspace.
+As you
+can see I
+forgot the
+actual image
+name so
+don't forget
+the image
+name and
+embedded Rust
+that we
+just created.
+You should
+see student
+at some
+hex value.
+This means
+you're actually
+running the
+image and
+you're inside
+the container
+right now.
+You can see
+the available
+workspace that
+we mapped
+here.
+Note that
+anything in
+workspace is
+saved to
+the host
+machine so
+you can save
+your work as
+you're going
+on and then
+copy that out
+or use it as
+a reference
+later.
+So when you
+close down the
+container anything
+in workspace is
+not deleted.
+That's saved on
+your host
+computer.
+You are welcome
+to use any
+editor you'd
+like inside
+that workspace
+write code and
+then call commands
+in this terminal.
+My recommendation
+is to use VS code
+so install that
+locally on your
+computer and for
+the extension you
+will want dev
+containers.
+This is the only
+one we will need
+right now because
+anything else inside
+the container will
+be installed for
+us.
+Down in the
+bottom left you
+should be able to
+click this open a
+remote window button
+and with that
+container running in
+the background you
+can click attach to
+running container.
+It should pop up
+with the container
+name.
+Make sure the
+image is correct.
+The end embedded
+rust image.
+Click that.
+It'll open up
+another window for
+you.
+So feel free to
+exit out of this.
+It will do any
+necessary configuration.
+It will first ask
+you to load the
+workspace default.code
+workspace that comes
+preloaded with the
+image.
+Click that.
+Give it a moment.
+It should try to
+install any necessary
+extensions.
+So the ones that we
+need for this are
+cortex debug that
+comes with some
+dependencies such as
+debug tracking,
+peripheral view,
+and so on.
+The big one we'll
+need is rust analyzer
+and that should come
+pre-installed in this
+image.
+The other way to
+interact with this
+container is to
+first close this
+running one.
+So in here we will
+just type exit.
+That exits out of
+the container and
+because of that
+dash rm flag it
+should clean it up
+for us meaning it
+deletes the whole
+container.
+Once you've built
+the image you
+shouldn't need this
+shell any longer
+at least for this
+episode.
+Bring up a new
+window for VS code.
+Go to file.
+Open folder.
+Go into the
+repository that you
+downloaded and
+unzipped.
+That will be our
+folder.
+Make sure you have
+workspace in there
+because that's what's
+going to be mapped
+to the container.
+Select folder.
+You should get a
+pop-up here saying
+hey we found a
+dev container
+configuration file.
+Do you want to
+reopen it?
+Feel free to click
+that to reopen it.
+That's probably the
+easiest way to do
+it.
+If that pop-up
+goes away you can
+click this open a
+remote window button
+and you can just
+say reopen in
+container.
+Not attach to
+running container
+because we don't
+have a running
+container.
+Reopen in
+container.
+That actually
+spins up a new
+container based on
+that image in that
+configuration file in
+that workspace or in
+that folder.
+Again it's going to
+ask you to reload the
+window and open the
+workspace.
+Feel free to go to
+file.
+Open workspace from
+file.
+In workspace you should
+see this default code
+workspace that provides
+some basic
+configuration and make
+sure that you have the
+correct folders viewed
+here that are mapped
+to your host machine.
+You will likely see a
+warning that Rustlings
+doesn't exist.
+We will create that in
+just a moment.
+Again if you go to
+extensions you should
+have the Cortex debug
+extension installed.
+If you get a pop-up
+saying that one of
+these didn't install
+one of the dependencies
+did not install feel
+free to click reload
+window.
+That should be fine and
+the big one we'll need
+is Rust analyzer.
+Again if you're using
+the Docker image that
+comes with the
+repository this should
+be pre-installed for
+you.
+Let's close out of that
+window.
+Now let's go into our
+files.
+Let's create our first
+Rust app the manual
+way.
+So in apps here we're
+going to store all of
+our apps throughout the
+series.
+In fact if you downloaded
+the repository this will
+probably be filled out for
+you.
+But we're going to
+recreate them throughout
+the series.
+Feel free to reference
+those or delete them and
+follow along.
+Let's create a new folder
+under apps called hello
+world.
+In here we will create
+another folder called
+SRC for source.
+In source we will create
+main.rs.
+.rs of course for Rust.
+Like with any good
+programming language we need
+an entry point.
+Rust looks for this main
+function to use as the
+default entry point.
+Functions are denoted by
+this FN keyword that says
+anything that comes after
+it is a function and
+treat it as such.
+We don't have any
+parameters for this
+function signature and we
+include blocks of code in
+these curly braces much
+like you've seen from
+things like C and C plus
+plus and Java.
+To print something to the
+screen we will use this
+println macro.
+You know it's a macro
+because of this exclamation
+point.
+So anytime you see that
+it's a macro not a
+function.
+This macro comes included
+in the standard library in
+Rust.
+Because we are running this
+in an operating system the
+standard library is included
+by default and we have
+access to things like this
+macro.
+When we compile this it
+automatically figures out
+how it needs to link to
+and include the correct
+dependencies for outputting
+to a console regardless of
+which operating system you
+are on.
+That is of course assuming
+that Rust supports that
+particular operating system
+so your major ones Linux
+Windows Mac OS it should
+have support for and this
+println macro should work.
+When we get to embedded
+code this is going to be
+much trickier because we
+won't have access or we
+will choose not to include
+standard because we don't
+have an operating system
+which means this macro
+won't work for embedded
+systems unless you include
+a very specific embedded
+version of it.
+But we will explore other
+ways to print out to a
+terminal in later episodes
+when we are working with
+embedded systems.
+Next type hello world in
+quotation marks.
+We will pass this string in
+as an argument to this
+macro.
+This string literal looks
+the same as you would
+expect in C, C++, and
+Java just in double
+quotation marks.
+We will end this statement
+with a semicolon much like
+you find in C and C++.
+This helps the compiler
+parse the different
+statements so you can
+actually continue on this
+line if you want with
+semicolons but in general
+programming practice we
+include different
+statements on different
+lines but make sure that
+you end each statement
+with a semicolon.
+Let's save this.
+So file save.
+Let's go down to our
+terminal.
+When we open a terminal
+this should default to
+apps.
+So ls to see what's in
+there.
+We see our hello world
+folder.
+Let's go in there and
+we will go into the
+SRC directory.
+We didn't need to make an
+SRC directory but when we
+get to using cargo you
+will see why in a moment.
+So there is our main dot
+RS file.
+Rust C is the rust compiler
+that comes bundled with
+rust when you installed it.
+Even if you did this
+locally when you install
+rust it comes with rust C.
+We will simply give main dot
+RS to rust C.
+That will compile our code
+and if we look at the
+available files sure
+enough we see the main
+application here just like
+we could if we created an
+executable using something
+like GCC we can run this
+with dot slash main and
+you should see hello world
+printed to the console.
+Let's go ahead and get rid
+of that executable.
+As I mentioned rust C is
+the actual rust compiler and
+we just called it manually
+here.
+What we've created is a very
+basic crate.
+This is the smallest amount
+of code that the compiler
+will process in a single
+compilation.
+It can be a binary crate
+which is what we created
+here which is an executable
+because we have this main
+it creates an entry point
+or it can be a library crate
+which is a dependency to
+be imported in other crates.
+Going forward we're
+actually going to rely on
+the cargo meta tool.
+This is a very powerful
+build system and package
+manager that also comes
+bundled with rust.
+So to use something that
+cargo understands whether
+it's a package or a
+component we actually need
+to create this package by
+creating a new file in our
+hello world directory.
+We will call this cargo with
+a capital C dot toml.
+Toml here stands for Tom's
+obvious minimal language.
+It's just another markup
+language that's popular with
+developers system
+administrators and various
+frameworks.
+But it is what cargo uses for
+all of its configuration
+files.
+Notice we have cargo dot
+toml.
+We have a source directory
+with our code in here.
+Unless we specify differently
+in the configuration file
+cargo will by default look for
+code in this very specifically
+named SRC folder and it will
+also look for this main dot
+RS to determine that this is a
+binary crate and it should
+create an executable.
+So this naming is important
+unless you specify something
+else to cargo.
+In our cargo dot toml file
+we're going to create a
+section which is denoted by
+this name in brackets.
+So anything under here
+belongs to this package
+section.
+And like other configuration
+files this is mostly a
+collection of key value pairs.
+So we have the key name equals
+hello which is the name of our
+package.
+package will give it a
+version in this case 0.1.0.
+When you initialize something
+using cargo it likes to set
+this version to 0.1.0 by
+default so we'll start there.
+You also have to specify the
+version of Rust you're using.
+They use the term addition so
+that you're not confusing it
+with a version of say your
+package or a particular
+dependency.
+An addition is like say a
+version of Python.
+Python.
+It's a particular collection
+of language features and
+rules that have been
+released and a new edition
+of Rust comes out once every
+few years.
+You could use something like
+a nightly build but I
+recommend sticking to one of
+these more stable editions.
+2024 is the latest stable
+edition so we will stick with
+that for the series.
+You will also come across some
+dependencies especially for
+embedded code that uses the
+2021 edition.
+One of the interesting things
+about additions is that Rust
+does a lot of work to
+maintain some level of
+backwards compatibility which
+means that say in our
+hello world app or we create
+another app we include
+dependencies.
+We list them out in cargo.toml.
+Some of those dependencies
+might have been written with a
+different edition of Rust.
+Rust generally guarantees that
+you can build those packages
+using that edition.
+So maybe some library use was
+built with edition 2021.
+We can write our app in
+edition 2024 and the two will
+operate together just fine.
+If you're coming from say the
+Python world you are probably
+familiar with dependency hell
+where the different versions of
+Python would break some
+packages and you would have to
+find a version of Python that
+worked with everything.
+So that is one of the major
+benefits of going with Rust.
+This edition is very nice.
+It guarantees some level of
+interoperability among the
+additions.
+You should also list out your
+dependencies and in fact we are
+going to include this as a
+section header here.
+Later we will fill this out as we
+include embedded libraries for
+our project.
+But this creates a bare minimum
+cargo.toml file that we need
+so that we can use cargo to
+build and run our code.
+Let's save this.
+Let's go down to our terminal.
+Let's go up a folder.
+So we should be in that
+hello world folder where we
+can see cargo.toml and
+source and we are going to say
+cargo build.
+Cargo build does all of the
+heavy lifting to call the
+compiler or rust C on the
+back end.
+It will download any of the
+dependencies you list.
+If you need to download them,
+build those dependencies and
+link them to your in this
+case application or library if
+that's what you're making.
+This is a very powerful build
+tool.
+If you're coming from
+something like make files or
+cmake, this is so much
+easier to use than having to
+custom create things like cmake
+files or make files.
+Let's go up here and refresh
+our files.
+You can see that cargo puts
+everything in this target
+folder as it builds.
+So this is our temporary say
+build folder.
+It contains artifacts from the
+build process and it contains
+our built target by default.
+It uses the debug profile or
+dev profile and it puts all of
+the artifacts in here and you
+can see our executable.
+Hello here.
+So dot slash target debug.
+Hello.
+And notice that the name of
+this executable came from the
+name of the package we specified
+in cargo dot toml.
+This allows us to run the
+executable directly from that
+debug folder.
+As you can see here, we've
+printed hello world to the
+screen.
+Instead of having to dig through
+those folders to find that
+executable, we can also say
+cargo run.
+That will find that debug profile for
+us.
+Find the executable in there and
+automatically run it.
+Note that if the project needs
+to be built, cargo run will
+build the project.
+I'm assuming it does some sort
+of diff on the back end to see
+if you've changed any code.
+Sure enough, it builds it and
+it runs the project.
+You can also type cargo clean.
+This essentially performs the
+very easy step of deleting that
+target folder, which you can
+see is now gone from our hello
+world folder.
+As I mentioned, cargo build and
+cargo run assume you mean the
+debug profile.
+We can specify a different
+profile with dash dash.
+So I'm going to say cargo build
+dash dash release.
+That's going to build a release
+profile version.
+As you will see later in our
+cargo dot toml file, we can
+specify different compiler and
+linker flags for the different
+profiles here.
+So maybe for debug, we want to
+have better symbol tracking and
+we want to enable certain
+outputs.
+We can do that here versus the
+release profile where we want
+to say optimize for size or
+optimize for speed and remove
+any of those debug symbols to
+create a smaller binary.
+We will explore that later, but
+know that you can easily add
+different profiles for debug or
+release or any other profiles you
+want to create yourself.
+Let's come up to our files.
+Let's refresh.
+Let's go to target.
+Sure enough, there is no longer a
+debug folder here.
+Instead, there is a release.
+So if we go cargo run, it's going
+to automatically build for this
+dev profile because we did not
+specify a profile here.
+Let's refresh our files.
+Sure enough.
+It now has debug and release and
+it went ahead and ran that hello
+executable in debug.
+As you can probably guess, we're
+going to say cargo run and give
+it the profile we want.
+In this case, dash dash release.
+It sees that the release application
+has already been built and it runs
+that application in release for us.
+As your programs grow in size and
+complexity, something you will often
+run into is that rust can be very
+slow when you build your project.
+There's a lot of things going on in
+that build step under the hood.
+Rather than sitting around and waiting
+to see if you get any compiler errors,
+you can run this command cargo check.
+This will essentially compile all of
+your packages and dependencies without
+performing that final step of
+generating your output code or your
+output binary.
+You will often find this is faster than
+cargo build and it's a great way to
+shorten that right check fix errors
+loop.
+So we will run this.
+You will see it does it automatically
+for the dev profile and we have no
+errors with that.
+We are done demonstrating a basic
+hello world app in rust.
+As I mentioned, this is for running
+rust with an operating system like
+Linux.
+We will be moving away from this to do
+embedded code starting with the next
+episode.
+As you will see, it's going to get a
+little bit more complicated.
+Let's close out of these files and
+let's turn our attention to rustlings.
+Rustlings is a collection of exercises
+that goes along with the rust book.
+So let's go to our workspace.
+This Docker image comes pre-installed with
+the rustlings tool.
+So type rustlings and then a knit.
+That's going to create the directory
+rustlings in the current directory.
+So just press enter to continue.
+You should see initialization done.
+If you refresh your files and then
+drop down rustlings, you should see
+this folder now filled out.
+Remember that this is on your host
+machine.
+So your progress in rustlings should be
+saved unless you decided to put
+rustlings somewhere else in this
+container, in which case you might lose
+it.
+So I recommend keeping it in that
+workspace directory.
+If you go into exercises, you can see
+it's a collection of sections here.
+So let's go into intro.
+We will bring up intro one.
+The general idea of rustlings is to
+fix any compiler errors you might find
+in these example programs.
+The first one, intro one, does not have
+any errors.
+It's just to demonstrate that
+everything works.
+So to check these, rather than trying
+to compile them yourself from the
+rustlings directory, so cd into that,
+you can just run rustlings.
+Note that rustlings will often require
+rust analyzer on the backend to run,
+which does come pre-installed with
+this image, but I find it struggles
+in a Docker container.
+It will automatically try to analyze
+your code in real time without you
+pressing anything.
+But I actually like manual run anyway.
+So type dash dash manual dash run.
+This runs rustlings in manual mode.
+Feel free to read these instructions.
+Press enter to continue.
+It will do its best to pick up where
+you left off.
+So it tries to remember the last thing
+you were working on.
+It will start in these exercises,
+zero zero intro and intro one,
+which is the file we have up here.
+You can see that it says exercise done,
+which means there are no compiler errors.
+If you'd like to run it to check,
+you can use these hotkeys here.
+You can even get a hint if you press H.
+So in manual mode, we press R.
+It will run it.
+Sure enough, it still works.
+So we're done with this,
+which means we can press N for next.
+And then that refers to intro two.
+So we open up intro two.
+And sure enough, this one actually has an error.
+So read the instructions up here.
+This says to fix the code to print out hello world,
+do what you need to fix that.
+And then in the terminal,
+press R to run it again.
+And you should see that exercise done
+when you have fixed that error.
+Press N when you're done.
+Notice you can't press N right now
+until you fixed it to move on to the next one.
+If you go into exercises,
+scroll down, you should see read me.
+Let's close out of this terminal.
+Actually, we can press Q to exit out of rustlings.
+X to exit out of the terminal.
+And you can see this exercise to book chapter mapping.
+These are the various chapters in the Rust book
+and how they map up to the exercises.
+Notice that it's not always necessarily in order.
+So pay attention to which book chapter
+refers to which set of exercises that map over here.
+If you need access to the book
+and you don't have internet,
+you can actually go to localhost colon 3000,
+assuming that the container is running
+on the backend for you.
+And it is hosting a version of the official Rust book.
+So feel free to work through these.
+At the end of many of the episodes,
+especially in the beginning of the series,
+I'll give you recommended chapters to read.
+I recommend reading through those
+because it will help you understand
+parts of the language.
+And then we will see them in use
+in the following episode.
+Additionally, I will recommend some rustling exercises to do
+so you can put those concepts into practice.
+We are all done here.
+So when you are done with the container,
+you can just exit out like that.
+If you were working in a terminal
+and you had the container running that way,
+you can just type exit like we did earlier.
+And that should clean up the container for you.
+I hope this helps you get a better understanding
+of the current state of Rust for embedded systems
+and where you might run into some limitations.
+In the next episode,
+we'll actually set up an embedded project
+for our Pico 2 and Blink and LED.
+Before then,
+I recommend reading chapters 1 through 3
+in the Rust book.
+These walk you through the Hello World exercise
+we just did,
+help you get a feeling for writing a basic guessing game,
+and understanding some of the basic concepts
+like variables and functions.
+I also recommend doing the first three sections
+of Rustling's exercises after the intro.
+These test your knowledge of variables,
+functions, and if statements.
+Good luck with the exercises
+and I'll see you in the next episode.
+We'll see you in the next episode.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+We'll see you in the next episode.
+
+We'll see you in the next episode.
+We'll see you in the next episode.
+
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.
+We'll see you in the next episode.

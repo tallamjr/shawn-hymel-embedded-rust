@@ -1,0 +1,125 @@
+Libraries in rust are usually separate crates that you can import into your applications.
+We'll take a look at how to create a library in this episode and then test it using a demo application.
+Previously, we saw how to communicate with an I squared C sensor and learned a little bit about
+generics. We're going to use those concepts in this episode where we wrap up our TMP 102 temperature
+sensor code into a separate library. Let's get started. For this episode, you'll need a button
+connected to GPIO 14 and a TMP 102 breakout board with SDA and SCL connected to GPIO 18 and GPIO 19.
+We're using the exact same hardware and connections as with the previous I squared C episode. To start,
+we're going to create a new library in our libraries folder here in a terminal.
+Let's go to libraries. We're going to call cargo new just like we've been doing.
+We're going to give our library a name TMP 102 dash driver. Instead of been, we're going to say dash dash
+lib for library. And we're going to say VCS for version control system. None. Refresh your files. And sure enough, we have new boilerplate for our driver crates like the one we just created here can only have one library. This means one public facing interface. It can be multiple files that all get linked together.
+It's really only that one interface. You can also have multiple optional binaries for testing and creating examples. So to create our library, we must have live dot RS, which we already have right here.
+And you can see it creates this template for us that includes some very basic unit tests. We're actually going to get rid of this and write our own because we're going to create a template for us.
+And we're going to create a template for us that includes some very basic unit tests. We're actually going to get rid of this and write our own because we're going to create a template for us.
+We're going to create a template for us that includes some very basic unit tests. We're actually going to get rid of this and write our own because this is meant to be used in an embedded system. We're going to say no standard library here as we've been working through these examples.
+I've been using comments like this with slash slash. So everything after it on that line is a comment. You can use the single line style like this with slash star or asterisk and then end it with asterisk slash.
+You can have inner doc comments, which is slash slash exclamation point. This documents the item that contains it. So in this case, the whole file, usually you will see this style of inner doc comment used to document a crate or a module.
+The built in documentation generation system cargo doc will look for these types of comments and know how to structure it when it outputs HTML. We won't get into cargo doc, but know that it exists.
+It exists and it is helpful to appropriately document your functions, structs implementations and so forth using the correct syntax for it. So if we want it to be picked up for say documenting this module, we want to use the correct syntax for this inner doc comment or slash slash exclamation point.
+Note that cargo doc picks up comments written markdown. So we can actually use one pound or hash symbol here to be the title of our library in this case TMP 102 demo driver. So that becomes the H1 header.
+We'll skip a line here and then create some basic description. So a simple demo driver for the TMP 102 temperature sensor. Next we'll want to include this embedded how interface because we're going to be using the I2C functions in it.
+Which reminds me we actually need to go include that in cargo dot tunnel. As we've seen before with our applications, we can include other dependencies for our library here. So we want to include embedded how as really the only library we were going to be using because that has some good interfaces that we can use like I2C functions.
+Let's save that. You will also sometimes see these triple slashes. These are called outer doc comments. These document the item that directly follows it. So for example, we're going to create a custom error for our crate. This attribute is going to decorate our error type. This is something that's built into the rust libraries where it automatically generates debug trait implementation for what we're about to create.
+That allows us to print the containing values to the terminal for things like debugging when we use for example the print LN macro with the colon question mark inside of curly braces. So for example, when we do this, we can actually print out our error message.
+But we can't put that right there because we need to define our custom error pub here means public. This makes the enum accessible to anyone that imports our crate by default.
+Anything defined in our crate here is considered private to the library error. E is a custom error type with E being a generic just like we saw in the previous episode.
+This acts as a placeholder type and it's later going to be filled out by the exact type implemented by the specific how we use in our say application. For example, the RP 23 5 X Hal might have an error type that gets filled out here.
+We're going to provide documentation for the only variant in this enum and we're going to say that communication and type E which is again a generic. So this is a communication error. It's something we're custom defining for I squared C. The name here is pretty arbitrary, but we will use this type later.
+Next we're going to provide an enum of possible device addresses. This is where pin 80 D zero can be connected to ground VDD SDA or SEL.
+This derive attribute just like we saw for debug allows the information in this enum to be printed using functions in that debug trait. We will also implement functions from the clone and copy traits.
+So the enum can be deep copied if needed. We will see this being necessary later. So you can see this in action. We can go to the TMP 102 data sheet.
+And if you scroll down to table six, four, you can find the a zero pin connections here and you can see the device addresses that get assigned based on that hardware external connection.
+So we're just translating those into hex for our enum. All right, let's go back to code next. Let's assign a method to that address enum. Just more or less as an example here. This allows us to get the I squared C device address in the unsigned eight bit format.
+So we will say implement address. We are implementing functions for the address enum. We'll say public. So this is a public facing function as you eight. It will consume self, which is the address and it will return a unsigned eight bit integer value.
+And all we need to do is just cast the self as you eight and return it. Next, we're going to create a look up struct for the different register address values. To do that, we'll create a struct and then implement those values as
+constants. Note that we're going to put this allowed dead code attribute here because we are not going to be using all of the values in this register struct, but they are available should save them.
+User need them or if you want to implement other functions later using these register values. This is how we can avoid getting warnings from the compiler when it says that some code has been initialized or written but not used.
+And then we're going to add an implementation here where we're just going to define some constant values. Note that I'm using a struct here instead of an
+enum. This is to allow you to look up the values without having to create an instance of it and it keeps it well organized in this register namespace.
+So first we'll add constant temperature. It's of type eight bit unsigned integer hex zero and then we'll put config as address hex one trigger low as hex two trigger high as hex three.
+Let's go back to our data sheet. And if you scroll down to this table 6.7, you can find the register addresses. So this is hex zero hex one hex two and hex three for the different registers.
+We're not going to be using these except for temperature to read temperature. We're not going to implement any functions around the others. Feel free to flesh out this if you would like to make a fully functioning library for your TMP one oh two. All right. So now we get to actually implement our driver.
+Now that we've set up some of the other structs and enums that we might need. We will declare it as a public facing struct. We'll call it TMP one oh two. And it's going to be a generic here.
+I to see with the capital C here is a generic type parameter. This acts as a placeholder type in this instance. It will get filled out later by the exact type implemented by the specific how we use in the application.
+So this struct will have two values. It will have something called I to see and that will be of type I to see. Remember this is a generic to get filled out later. And we will also have address which is of type address.
+Address and if we scroll back up you can see that we implemented address right here. So it can only be one of these four values and that has the device address for our TMP one oh two.
+We'll define some methods for our struct. So we're going to create an implementation. We will declare that I to see generic type parameter again for this implementation and we will need to define some trait bounds.
+Here we're saying that this implementation only works for the generic types of I to see that implement I to see little c trait. Let's take a look at the documentation for embedded.
+How let's go to modules and you can see the available modules here. So in I to see which is what we imported with that use statement at the top of our library.
+We'll scroll all the way down find traits. Here's I to see I to little c and you can see the trait defined here where anything that implements this trait must implement or define these functions.
+So it needs to have transaction read write and write read. So as long as the I to see type has that has implemented that trait this will work for it and it won't throw an error during compile time.
+So a how can optionally provide its own implementations but the signatures need to be the same for it to implement this particular trait will create our essentially full constructor here.
+So public function new we pass in I to see. So essentially this is the I squared C bus that is of type I to see that's that generic.
+We pointed out earlier. You also need to pass in an address for the device. So however you've connected pin a zero.
+You should know the address and you need to pass that in. So that comes as an enum. This will create a new TMP 102 struct fill it out with I to see and address that's been passed in and return ownership to the caller.
+One thing you'll notice is that rust does not have a traditional overloading system like you might find in C plus plus or Java.
+You cannot have multiple functions with the same name but different parameters in the same scope. So if we want to create something with say a default we have to create a new function.
+In this case we'll call it with default address. So this is the same as calling new but we're going to assign the address here.
+We will construct a new TMP 102 struct pass in the I to see bus and then set the device address to ground which should be hex for eight and that will just call the new method which returns that struck back to the caller.
+Next we'll actually create our read temperature in Celsius function. This will be a public facing function. We will take an immutable reference to the struct and we're going to return a result.
+If it's okay it will contain a float 32 that's the Celsius that we converted or it will return an error and that's going to be of type I to see error.
+The error should be our custom error that we created earlier where we set it to be concrete type that's passed in from the I to see library and set to that error.
+If you're not seeing type information from IntelliSense, go ahead and press control P type a greater than symbol and look for restable.
+Start server for rust analytics. Give it a moment to cash with that reloaded. You should be able to hover over error and sure enough you can see it is the type that we defined earlier with that communication variant in that inu will initialize a receive buffer.
+That's going to be two elements. Each of them are eight bit unsigned integers. We'll set those initially to zero. Then we're going to actually read from the sensor.
+So remember we have an I squared C bus associated with the struct. So we will call self dot I to see. And then from that struck, we will call dot right read that we saw in the previous episode.
+We will pass in the address, which is the device address, but we will need to call that dot as you eight in order to pass it in as in eight bit unsigned integer.
+We will give a reference to an array with this singular value of the temperature register address we want to read from. So that should be one bite. And then we will give it a mutable reference to the receive buffer where it will be filled out.
+Now we're going to call match on the return value from this function. If that function returns, okay, doesn't matter what's in it. We're also going to return. Okay.
+But fill it out with the Celsius value because as you can see in the signature of the function, we are returning a result and the okay should be a float 32 bit value.
+So we will write that raw to Celsius function in just a moment. And if it's an error, we will wrap it with our error communication type and return that to the collar. And that's all we need for that function because we have returned those values.
+Now we need to write that conversion function. We're going to accept a reference to self that will be immutable. We also need that two bite buffer where each of those elements are eight bit unsigned integers and we will return a 32 bit float because that's what we're ultimately returning to the user.
+Note that I did not put pub for public facing in the front of this function. So this is a private function that can only be seen within this struct. So this is a helper function for that read temperature public facing function.
+Then we're going to perform the same math we saw in the I squared C episode. We're going to swap the two bites in the buffer by converting the first bite to an unsigned 16 bit integer, shifting that value to the left by eight bit wise or in it with the value in the second element of that array, which has been cast as an unsigned 16 bit integer.
+We're then going to take that value, make it a signed 16 bit integer so that it maintains that sign. We are going to right shift it by four because remember this is a 12 bit value from the temperature sensor.
+Then we will cast that as a floating 32 bit value and multiply it by the resolution, which is 0.0625 degrees Celsius per bit. And that's the value that gets returned to the caller.
+In this case, it will return Celsius here and that okay with the Celsius wrapped will get returned to the ultimate caller. All right, let's save this. Make sure your cargo dots. Tom is also saved.
+And now it's time to create a demo application. We're done with our library. So let's close down those files. Let's go to our I to see TMP 102 demo that we made in a previous episode.
+I'm going to delete target so that this copies a little bit faster. I'm going to also delete cargo dot lock if you really want to. That should get automatically recreated. Let's copy this. Let's paste it.
+In order to create a copy here. I'm going to rename this to TMP 102 driver demo. Let's open up cargo dot Tom. And we are going to give it a path instead of a version because it's not going to be downloaded. It's actually local for us.
+So this is a great way to demonstrate libraries or create tests around them. We don't have to check it into crates dot IO. So we're going to give it paths. That's up to directories.
+Then we're going to go into libraries and then it's going to look for TMP 102 driver and use the code it finds in there. In fact, it should find a cargo dot Tom. I'll and treat this as its own standalone crate.
+Let's save that. And in our driver demo, we're going to open up main dot RS. We will need all of these imports as they are right now. We don't need I to see because our driver is going to take care of that in
+import for us. We still need this rate frequency when we're setting up the ice grid C bus. And then at the bottom of the imports here, we're going to include our library that we just created. So we have two different things we're going to import from that library. The first is address. I will bring up the source code here so you can see it. Let's move this over here.
+So that is this public facing a new so we can get the device addresses as needed. And the second is the actual TMP 102 struck.
+Which is defined here with the implementation below it. Let's get rid of these constants since once again, our drivers taking care of that.
+After initializing the ice grid C bus driver. Now we can set up the struct from our driver to do that. We will create a mutable variable named TMP 102.
+We will say TMP 102. That's the TMP 102 struck. So that's that namespace. And we're calling the new function in there to create a new instance.
+We will pass in this I2C bus that we created this handle. And we will also set the address to address ground. So it can only be one of four addresses. And that should translate to hex for eight in the library.
+The other thing is the compiler will probably yell at us or give us a warning that this does not need to be mutable anymore.
+Just like we saw with pins in the previous episode where we wrapped up the LED driver. Because we're passing that into here. This now has that ownership.
+And what we care about is we're changing this outside struct. So this needs to be mutable.
+We do not need a read buffer since that's taken care of by our driver. But we still want this string in order to print stuff to the console.
+In super loop, we will continue to pull USB as we've done. And we're going to look at that button state. Look for that falling edge. And we're going to read from the sensor.
+But instead of directly reading from the I2C bus, we're going to do it using our driver. So we're going to say let temp C equals match.
+So we're going to do a match statement here. TMP 102 is our struct for our driver. And then that read temperature C function that we wrote.
+And that can be one of two possible values. If you remember, it's a result, which means it can be OK and a float 32 in that OK or an error, which is our custom error type that we defined in that driver.
+So if it is OK, we will simply unwrap that OK and just return temp. And that will get assigned to temp C here. So that flows out of match and gets assigned to temp C.
+And then if there's an error, let's demonstrate some error handling here. So we have some sort of error message with E.
+We will clear our output. That's the string that we defined earlier. We will use the right macro pass in a mutable reference to output and have it construct the string for us error, colon, and then a placeholder for the error value.
+So that gets filled out by E and then we will unwrap the output of that macro. Let's go back and look at our library for just a second.
+We scroll up to our definition of our error. E new. You can see that we added this derived debug attribute. That's what allows it to be printed using this placeholder string here.
+The colon question mark inside of curly braces. Now we will say let underscore. So we're just going to throw away this return value and we're going to say serial dot right the output that string and then dot as bytes.
+So it gets transmitted out of the serial port. And we will go back to the top of the loop because we don't want to print out whatever happens to be in temp C at this time.
+So you can see we have error handling here with a mixture of expressions and statements. So we have an expression here which returns this value and a statement which performs an action printing to the console but does not return anything.
+So temp C does not get assigned to anything if an error happens. That's because flow of execution jumps back to loop before this ever returns. We will keep this as is to print out the value and save that button state for next iteration.
+This looks pretty good. So let's file save in our terminal. We're going to navigate to apps. We're going to go into TMP one or two driver demo. We're going to say cargo build any lock that should build.
+So we have a couple of errors here. Let's see what's going on.
+Forgot a semicolon. Very common. All right. After this statement here we actually need a semicolon. Let's save try building again.
+All right. It looks like the semicolon save the day. We have compiled. Then we will call Pico tool UF to convert. Give it the elf file. Looks like I forgot to change the name of the project. So it will be the I2C TMP one oh two name inside of target thumb the eight folder and inside of debug.
+We'll give it the type elf. And we'll tell it to dump it into firmware dot you have to with that hold the boot select button on your Pico to plug it into your computer.
+That should enumerate as a mass storage device. Go into the repository you've been working in. Go into workspace apps.
+Go into TMP one oh two driver demo. Let's copy firmware dot you have to let's paste it in here. That should restart the Pico. You can close this down. Open up your favorite serial terminal.
+Open up your favorite serial terminal. I'm going to use putty. Connect to your Pico and then feel free to push the button to get a temperature reading. Once again you can try putting your finger on the TMP one oh two and watch the temperature go up.
+When you remove your finger that temperature should go down. And let's see what happens if I remove the actual sensor breakout board and push the button. Hey there it is. We have our communication error.
+We have our communication error and we get the actual I squared C bus air inside of that. So communication is that error enum variant that we put in our library and it wraps up that no acknowledge address type from the I squared C driver.
+And with that you can see that our driver is indeed working and we've successfully wrapped up something for I squared C to talk to a particular sensor.
+While we tested the library locally. You can also publish it to crates dot IO. We won't cover publishing your library in this series, but feel free to look through chapter 14 in the rust book to see how to do that.
+If you would like a challenge. Try changing out our custom demo library for this more robust TMP one X two library. This is a third party library provided by the community and it works with our embedded how interface feel free to look through the docs and examples on this page.
+You can also look through the source code on the projects and get hub repository. If you did it right, it should work the exact same as our custom library.
+But notice that I'm not using our custom library anymore. Rather, I've included the TMP one X two library in my cargo dot toml file. For the next episode, we're going to take a step back from embedded work again to talk about lifetimes and lifetime annotations.
+For that, I recommend reading section 10.3 in the rust book. I also recommend working through the lifetimes section in the rustlings exercises.
+You've probably seen lifetime annotations in the docs already, but we haven't explicitly used them in our code.
+I'd like to cover them on their own before we come back to embedded code. See you next time.
+.

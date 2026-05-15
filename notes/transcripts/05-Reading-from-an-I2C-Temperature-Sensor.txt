@@ -1,0 +1,451 @@
+Now that we have a template for blinking an LED and writing data out over the USB serial port,
+let's explore another important feature in the hardware abstraction layer,
+the inter-integrated circuit or I-squared C.
+It's a very popular communication protocol used to talk to all sorts of digital electronics, including many sensors.
+We built our template for creating embedded Rust applications for our Pico2,
+and we reviewed Rust's ownership and borrowing rules.
+Now we can start diving into more embedded examples to give you some basic building blocks to create your own projects.
+We'll start by talking to an I-squared C temperature sensor in this episode.
+You'll need to connect a TMP-102 temperature sensor and a button to your Raspberry Pi Pico2 board as shown.
+Connect SDA on the TMP-102 to GPIO18 and connect SCL to GPIO19.
+You'll also want to connect one side of the button to ground and the other to GPIO14.
+Now let's jump into writing our application.
+Before we start writing code, let's take a look at the TMP-102 datasheet.
+This is an inexpensive, very simple temperature sensor that is great for testing I-squared C and learning to talk to sensors through that bus.
+As you can see, it has 12-bit resolution by default.
+That means each bit is 0.0625 degrees Celsius.
+We will need that math for later.
+If we scroll down to this table where it talks about the device address, if the A0 pin is tied to ground, that sets the address to 0.48.
+On the SparkFun breakout board that I'm using, the default is to have A0 pulled to ground.
+So we will go with 0.48 for our address.
+Scroll down a little more and you can see how to read from the registers.
+We need to first write out the device address.
+We then set the read-write bit to write.
+We write out the register address of the register we want to read from.
+Stop.
+Start another write.
+Write out the device address, so 0.48.
+Set the read-write bit to read.
+And then we read two bytes from the temperature address because it's 16 bits.
+There's only four registers in this chip.
+The only one we care about is this temperature register, so that's at address 0.
+Feel free to play around with the configuration register and setting up thresholds or triggers.
+We won't get into that here because we're just trying to do a simple read-write and get that temperature value.
+If we take a look at the contents of that temperature register, you can see that the highest 12 bits make up the temperature value.
+The last three are not used, and there is an optional bit we can enable for extended mode, but we're not going to be using that one.
+So we just need the eight bits of the first register and four bits of the second register.
+We will combine those, do a little math, in order to get the temperature in Celsius.
+You can use the configuration register to change some of the settings, but we'll leave it alone and just use the defaults.
+Okay, let's get started with some code.
+We're going to start with our USB sample, so let's expand that.
+Let's delete the target folder because that's usually kind of large and has lots of files in it to make copying a little long.
+So we will delete that.
+Yes.
+We're going to take USB serial, copy that, go to apps, paste it.
+So now we have a copy, and I'll rename it to i2c-tmp102.
+In our cargo.toml file, we want to change the name of the project to i2c-tmp102.
+And we also want to add a dependency for the heapless crate.
+This is a library that gives us access to various data structures, think like vectors, without relying on the heap.
+So it does everything in the stack.
+All right, save this.
+So file, save, let's go to source, let's open main.
+We still want our panic handler that we define ourselves, and we want our HAL.
+And from our HAL, we're going to bring into scope GPIO, function i2c, and pin.
+We'll still need our USB device so that we can print out temperature data over the serial port.
+And from that embedded HAL interface, we're going to bring in input pin and i2c.
+Our HAL library has this Fugit library as part of it that gives us access to some types to help us define things like rates and frequencies.
+And that heapless library that we're importing gives us access to strings that aren't stored on the heap.
+And the core library has this format write interface or trait that gives us access to some functions that allow us to create strings from things like UTF-8 encoded data.
+So this is how we're going to format our buffer for printing out over the serial USB port.
+All right, we're going to keep our custom panic handler, which does nothing.
+We still need to copy that boot metadata, and we need to add a couple of extra constants here.
+The first one is our device address that we saw from the datasheet.
+This should be hex 4-8.
+And then we have the address of the temperature register.
+In this case, as we saw from the datasheet, it's just zero.
+Feel free to fill out the rest of the register addresses if you want to talk to them and configure the sensor or configure your driver for the sensor.
+But we're just going to keep things simple for now.
+All right, let's scroll down.
+We still need to initialize our clocks and phase lock loops, but we won't use the timer for now.
+So let's remove that.
+As we saw in a previous episode, we're going to initialize this single cycle I.O. block, or S.I.O.
+And we're going to use that to initialize our pins and our I2C port.
+Then we're going to split off ownership of the peripherals struct and set these pins to their default state.
+In this case, we just have bank zero on our Pico2 or our RP2350.
+We will get access or ownership in this case assigned to this pins variable.
+Then we want to configure the button pin so that we can press the button and display the temperature whenever that button is pressed.
+So we will need a mutable button pin for this.
+We will go into our pins struct, get to GPIO 14 because that's the pin that the button is connected to.
+And we're going to use this into pull up input function to add a pull up resistor internally and turn it into an input pin.
+If you find that IntelliSense is not working, press control or command P, type a greater than symbol,
+and either search for or look for this restart server function from Rust Analyzer.
+I find that this sometimes helps, especially with the Docker container, to get IntelliSense working with Rust Analyzer in the back end.
+Give it just a moment to cache all of that information.
+And you should see things being underlined.
+The underlining shows that that variable is mutable.
+And at some point, I should be able to press control alt and get that type information for my various variables.
+And then, of course, I should be able to hover over or right click and say go to definition.
+And it looks like something is yelling at me.
+Oops, I forgot a semicolon here.
+That should help.
+Glad I have IntelliSense.
+Now that we have our pin configured for our button, let's configure our SDA and SEL pins for I squared C.
+So we're going to do this by first saying let the variable name, in this case SDA pin, and we're going to give it an explicit type here.
+So we're going to say pin, and we're going to use generics, even though we haven't quite talked about them yet.
+This is setting a concrete type for that pin.
+So it is of type pin, and then setting that generic of we don't care, hence the underline.
+We want to configure the function to be I squared C.
+So this is where we use that type function I2C, which tells the driver to configure the hardware of that pin to act as an I squared C pin.
+And then underscore, meaning we don't care what that type is.
+The Rust compiler will figure out what's needed to turn this pin into an I squared C pin based on this.
+But we do need to call this function pins dot, give it the actual pin number we want, so this case GPIO 18, and we will call the reconfigure method.
+So let's bring up the docs for a moment and see what's going on.
+So if we go to the RP 23 5X HAL docs, let's go to modules, and let's go into GPIO.
+So under structs, we should find pin.
+And in here, this is where you can find that into some type of mode here.
+So we're using into pullup input.
+So it just configures the pin to operate as a pulled up input.
+Great.
+That's great.
+That works for our button.
+And so these angle brackets here tell us that it's returning a generic of some type pin.
+And so it's going to be set here with some function.
+In this case, it's going to be set as an input.
+And it is telling us to pull up that resistor internally.
+The I here is a pin ID.
+This maps to one of the usable GPIO numbers on the back end.
+So generics are similar to C++ templates.
+We will dive into those more in a later episode, but know that this is how we define an abstract type.
+And then we can make it concrete in our code by setting these values inside of this generic.
+So if we click on pin, you can see that information pin ID function pull type.
+So when we're defining our I squared C pins, it does seem a little wonky, but we don't define a pin ID and we don't define a pull type.
+You might need to pull up if needed, but generally it's a good idea to do pull ups for I squared C in hardware.
+And the SparkFun board has those pull ups by default.
+So we won't be defining pull ups here, but we do need to define this function.
+Or we do need to set this function.
+You can see the available ones here.
+So we're using function I2C for our I squared C pins.
+And as you can guess, we will do the same for the SCL pin.
+That's going to be pin 19.
+And we will give it the same type by defining this generic here.
+In case you're curious where those pins are coming from for those individual functions,
+if you go to the Pico 2 data sheet or look for the pinout, you can see we're using GPIO 18 and 19.
+And those can be given the functions I squared C for bus 1.
+And they can be defined to SDA for data and SCL for clock.
+So we're just telling the how on the back end to change this pin function to SCL and change the GPIO 18 pin function to SDA.
+All right, let's go back to our code.
+Next, we're going to initialize and take ownership of that I2C peripheral.
+We're going to go into HAL in that namespace, go into the I2C namespace.
+And then you should have two available buses, as you saw from that pinout.
+We have I2C 0 and I2C 1.
+So let's select I2C 1.
+Then we have to configure that peripheral.
+So we have to pass in I2C 1 from our peripheral access crate.
+We need to pass in our two pins, SDA first and then SCL.
+Then we need to give it a frequency.
+So 100 kHz is normal operation clock speed for I2C.
+You could try 400 kHz.
+That's considered fast mode.
+But considering we're doing everything on a breadboard, let's keep it slow.
+Reading from this very simple temperature sensor does not need to be fast.
+Then we pass in pack.resets to reset all of the pins and then connect it up to the system clock.
+If we go back to the top page of our RP 23.5x HAL, let's go down here.
+You can see how it's re-exporting this I2C library.
+This just gives us access to the I2C namespace in our HAL.
+And you can see that this is defining an I2C struct where it implements a number of functions for that struct.
+You can think of it like a class where it holds some data as well as defining some methods unique to that class.
+But in this case, there are no classes, so it's just implementing functions for that struct.
+The method we called is I2C1.
+This configures the I2C peripheral to work in master mode.
+And you can see the information that needs to get passed in, which is what we provided.
+It returns an instance of the struct.
+And we have ownership of it now from it returning this.
+All right, back to our code.
+We're going to leave the initialization of the USB device alone because we're going to be using that to print out information from the temperature sensor.
+Let's actually keep this receive buffer.
+But instead of 64 bytes, it's just going to be two corresponding to the two different bytes from the temperature register.
+Then we're going to construct a string on the stack using that heapless library.
+So if we press Control-Alt, you can see the type that's been defined here.
+So it is of type string, and it's going to be 64 characters long.
+So that's how the heapless library works.
+We have to define a space for the string and give it a known constant value so it allocates it on the stack rather than in the heap.
+Now let's rewrite our super loop.
+So I'm going to delete everything inside of here, and we don't need this timestamp any longer.
+Let's create this previously pressed value, and we'll initially set it to false.
+This is just going to be a Boolean.
+As we saw in the previous episode where we talked about the USB serial device, we have to pull it at least every 10 milliseconds.
+Otherwise, the operating system will either throw an error or just drop the device altogether.
+So we will just say let underscore, meaning throw away the result here, USB dev, that's our device, pull, pass in a mutable reference to this array that is a mutable reference to our serial, or that array contains a mutable reference to our serial device.
+Now let's get the state of the button using this is low function.
+Is low returns a result.
+So one way to unwrap that result is to do this match statement, which is similar to a case switch, but it's a little bit more powerful in what it can do.
+Here, result is an enum.
+That means it can only be one of two states, either okay or error.
+Now those two particular states are generics, and they're actually assigned different types or concrete types.
+This is defined on the back end from the hal, which defines this is low method.
+So match will match to either okay or error, the two different options from result type.
+If we get okay, we can get whatever is in okay, and we will just return it here.
+We will do the same to error with underscore E being the error type, and we're going to return false from this match statement.
+So if okay is returned from this result, which we can see here, that's the type being returned, and it's going to return a Boolean in okay or some type of self error if it's an error state.
+That's if, for example, the button failed to read or the pin failed to read.
+So whatever is in state, this is what gets executed.
+You could do some stuff in here.
+You could actually perform some calculations using that state value, but by making this an expression where a value is returned, this gets assigned to this variable because of this equal sign here.
+So after match performs, a value is returned.
+It gets set here.
+So state can either be true or false if the button is low, or if there was some error, we're going to say underscore here by convention.
+This means that we're not going to use whatever value is in here inside of our either statement or expression.
+So we could use E in here to do something, say print it to the console saying, hey, there was an error with this pin or trying to read from this pin, but we're just going to turn this into an expression that just returns false always.
+So we don't care what the error is.
+If the pin throws an error, just say false, that the button is not low.
+So this is a good demonstration of how to use the match function, but there is a helper function that is generally considered more idiomatic in rust to save you on writing this extra code here.
+I find reading this is fairly straightforward to understand, but rust generally likes you to do one of the helper functions.
+In fact, you might even get a warning that there's a helper function to match that pattern.
+We've used the basic unwrap method before it returns.
+Whatever's an okay.
+If there is an error, it actually goes to the panic handler and the program crashes.
+The other option is to use something like this unwrap or where we can return a default value.
+If there's an error, so now we can say unwrap or false, and this is functionally equivalent to that match statement we just wrote.
+And actually, we should not be using the match keyword here.
+This is functionally equivalent to that match statement.
+Now we're going to say if button is pressed logical and not previous pressed.
+In other words, we're looking for an edge here.
+If the pin is low and on the previous cycle, it was high.
+That means we saw a high to low edge with that high to low edge.
+It means the button was pressed and let's go ahead and read from the sensor.
+To do that, we're going to call I to see.
+That's the bus.
+We initialized this right read method.
+We're going to give the address of the device.
+In this case, that's the hex for eight.
+We're going to pass in a reference to an array of the register address we want to read from.
+And then we're going to give it a buffer that we want to put the data into.
+In this case, it's a mutable reference to that buffer.
+Let's go back to our documentation.
+You can see that right read is not implemented in our direct methods.
+That's because it's considered a trait implementation.
+And we will look at traits later, but it basically works as an interface.
+And for concrete types, certain things need to be implemented.
+Certain methods have to be implemented to meet that trait.
+In other words, this is a contract specified somewhere that says you must have a valid implementation of a particular function.
+So under here, if we go to this I to C for type A, and there's two different concrete types.
+So remember, these are generics.
+So I to C, some type of generic for this is called a trait bound where this implementation,
+these functions are being implemented for this concrete type.
+And if we scroll down a little bit, we also see this implementation for this concrete type as well, which looks pretty similar.
+But from what I can tell, it's this basic implementation here.
+And if we look through here, we see that read write, it is an async function, which we won't look at those until we get to embassy much later.
+But here is the signature for write read.
+We need to give it the I to C struct we created and initialized.
+We need to give it the device address.
+You can see here that it is indeed looking for an array of bytes for the register address.
+And we need to give it a mutable reference to an array of bytes.
+It's going to return a result.
+And this is going to have something in here that we can get.
+And it's going to also potentially return an error.
+These are the two different types for okay and error within result.
+So knowing that, let's go back to our code and we have our result.
+Let's press control alt.
+You can see that matches up with that signature.
+We could do the unwrap or or an unwrap method here from that result.
+But let's take a different approach.
+Let's say whatever's in result will keep it.
+But if there's an error, we actually want to log that to the console and say, for example, we couldn't read from the temperature sensor.
+So we will call serial dot right and we will spit out the constant string error.
+Could not read temperature.
+This should return a result, but we don't care what that result is because we just assume that if we can't write it out, serial, something's wrong anyway.
+And so we will assign this so we can avoid the error to this underscore variable, which just means we're going to throw that value away.
+And the continue keyword works like it does in other languages where it just goes back to the top of loop.
+And so we'll just say, hey, we couldn't read the temperature for whatever reason.
+Say, for example, the sensor got disconnected and then just go to the top of the loop.
+All right. So now that we have the raw temperature data filled out in our Rx or receive buffer bytes zero and one, we need to combine them into something that's actually Celsius.
+We can print to the console.
+So the first thing we need to do is put them into the correct byte order.
+So we can print to the first byte and we will actually perform a typecast.
+This is done using the as keyword and we will cast that into an unsigned 16 bit value and we will left shift this by eight bits.
+So this becomes the most significant byte.
+Then we will bitwise or that with the second byte, which we also cast into 16 bits.
+Remember that the last four bits of that second byte will just be zeros because that doesn't contain any useful information for us.
+So we need to write shift this entire value by four bits to get that 12 bit value.
+Now we want to retain any negatives here.
+So then we take our raw temperature and cast it as a signed 16 bit integer, which should keep the positive or negative sign.
+Finally, we want to convert it to Celsius.
+So let's create a new variable here.
+We are going to cast that temp signed as a floating point 32 bit value and we will multiply that by our resolution, which is 0.0625.
+This is what we got from the data sheet because each bit is equivalent to 0.0625 degrees Celsius.
+Then let's first clear our output.
+Remember that output is this heapless string buffer that we created.
+That's 64 characters.
+Then we will use this right macro.
+This is similar to something like s printf or sn printf you might have seen and see where we're going to construct a string and store it into a buffer.
+But this is all done as a macro instead of an actual function.
+We will give it a mutable reference to that heapless string.
+Then we will construct our string.
+We will say temperature colon then a placeholder.
+The colon dot two says to print out our float.
+And for display purposes, it will be rounded to two decimal points because of that dot two.
+And then degree C.
+And then give it a carriage return a new line character so it prints out correctly in hopefully Windows and Linux.
+Then comma and then whatever value should go into that placeholder.
+So temp underscore C.
+And then we do need to say dot unwrap for this.
+If this fails for whatever reason, it should go to our panic handler.
+And then we will actually write out that string.
+So we have to convert that string to bytes as we've been doing with that B character before our constant strings.
+So we call this as bytes function and then let serial dot right handle actually printing it out.
+If we hover over as bytes, you can see this as part of the core library where it can convert a string slice into a bite slice.
+So it takes our whole string, converts it to bytes and serial dot right works with bytes.
+And then before the next iteration, we need to save the current button state into the previous pressed variable so that we can look for that edge again.
+All right, let's save this.
+Let's go to view terminal.
+Let's go into bash.
+We'll navigate into our current project directory.
+And we will say cargo build with any luck of this should build.
+And we need to say Pico tool you have to convert because we want to convert our L file to a dot you have to file.
+We'll give it the location.
+So that's target the thumb V8 M folder going to debug point it to the I to C dash TMP 102 file.
+We'll give it the type of elf and we will say store this into firmware dot you have to as an output.
+Once that's done, you should see firmware dot you have to in this folder.
+I'm going to hold down the boot select button on my Pico to plug it into my computer.
+This should pop up for me.
+Go into the introduction to embedded rust folder.
+Let's go into workspace apps.
+Our folder we've been working in.
+Let's copy our UF two file.
+Let's go to our drive that got enumerated from the Pico to let's paste that.
+With any luck, it should reset.
+Let's bring up your favorite serial terminal.
+Connect to it.
+Remember, we need to press that button to actually read the temperature.
+So let's press the button.
+Sure enough, it starts to read.
+Feel free to touch or breathe on the sensor to watch the temperature rise.
+So I'm holding the sensor with my finger and you can see the temperature go up.
+And then when I let it go, it starts to go back down as I'm pressing that button.
+You probably noticed that when you press the button, you'll sometimes get multiple readings.
+That's due to the buttons contacts rapidly connecting and disconnecting on a single press,
+a common issue in the electronics world known as switch bounce.
+If you would like a challenge, try implementing a software debounce mechanism
+in your code to prevent multiple lines to the console on each press.
+And Barella has a great article on Adafruit's site that gives a good debouncing algorithm
+in Arduino code.
+Your job is to translate this to rust for the I squared C demo we just made.
+In the next episode, we'll dive into generics, which are similar to templates in C++.
+As a result, I recommend reading chapters 10.1 and 10.2 in the rust book before then.
+I also recommend doing the options, generics and traits exercises in rustlings.
+We'll review generics and traits in the next episode, but that should get you started in the meantime.
+See you then.
+We'll see you then.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Bye.
+
+
+
+
+
+
+
+
+
+
+
+
+!
+Bye.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Bye.
+
+
+
+
+
+Bye.
+
+
+
+
+
+Bye.
+
+
+Bye.
+
+
+
+
+
+

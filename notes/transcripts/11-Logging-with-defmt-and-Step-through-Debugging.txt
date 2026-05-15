@@ -1,0 +1,429 @@
+In many embedded systems, simply toggling a pin or printing out some strings over the serial port is enough to help you debug your system.
+But as your project grows in complexity, you might need more tools.
+This is where logging frameworks and step through debugging can come in handy.
+Last time, we looked at pausing our main thread of execution to handle hardware interrupts.
+Now, we'll turn our attention to a couple of advanced debugging tools to help you build your embedded Rust project.
+We'll first see how to efficiently log values using the D format framework, and then we'll explore some ways you can step through your code one line at a time.
+As a heads up, GDB support for Rust and the RP 2350 is still new and a bit buggy at this time.
+For this demo, you will need the Raspberry Pi debug probe.
+It's a cute, inexpensive hardware debugger for Raspberry Pi microcontrollers.
+It uses an RP2040 and can talk over SWD and UART ports to your RP2040 and RP2350 targets, which includes flashing and debugging.
+We'll use one of the included JST cables to connect to the serial wire debug or SWD port on our Pico2.
+We'll only use the debug port on the probe, which is marked with a D on the case.
+We won't use the UART port, which is marked with a U.
+Note that the orange wire should connect to the SWCLK pin on the Pico2.
+Black to ground and yellow to SWDIO.
+Make sure to plug in USB cables to both your Pico2 and the debug probe as the probe can't provide power to the target.
+We'll be using the blinky example that we created in the second episode.
+So go into there.
+Let's delete target.
+So it copies a little more quickly.
+And then copy blinky, paste it into apps.
+And we're going to rename this blinky debug.
+Let's go into cargo or .cargo.
+Go to config.toml.
+And under our linker directives, we're going to add a new one here.
+We're going to add dash C link arg equals dash T capital T defmt.x.
+We have to manually add this linker flag for deformat to work.
+Deformat, abbreviated defmt, stores log message strings in a custom section of the elf file.
+Then when you use a debug tool on your host computer like probe RS, which we'll see later,
+it creates a lookup table from those log messages.
+The embedded binary contains a small integer or identifier that gets sent over the SWD link.
+That identifier corresponds to one of the messages in that lookup table on the host machine.
+And the host debug tool looks up the appropriate message to print to the screen.
+This allows us to do very fast logging from an embedded system.
+We also need to create an environment section, env in brackets.
+In this section, we have to specify this environment variable defmt underscore log, deformat log.
+We'll set that to debug.
+This sets the environment variable that cargo uses during the build process.
+And we can set the log level to one of five.
+Here are your five basic levels.
+So by setting it to debug, it will print out everything that is a debug info, warn, or error message.
+If we set it to something like warn, it would print out all warnings and errors.
+So feel free to use one of those strings if you want to change your debugging level.
+Let's get rid of those and save that.
+Now let's open up cargo.toml.
+We'll change the project name to blinky-debug.
+We also need to add a few dependencies here.
+We'll be using the deformat library to print out strings over the SWD port so that we can print them to the console.
+Deformat, as I mentioned earlier, keeps indexes in the binary that correspond to entries in a string lookup table that resides on the host computer,
+which allows for strings to be printed to a connected console more quickly than if the strings were stored directly on the microcontroller.
+With deformat, we need to specify the transport layer.
+In this case, we're going to be using deformat RTT, which stands for real-time transfer.
+It's a type of protocol.
+That's what's going to transmit the log lookup index along with any runtime variables that need to be displayed.
+I found that to get deformat to work, we need to include this panic probe library.
+This is going to do the panic handling for us so that we can get rid of our existing panic handler that does nothing.
+With the features equaling print deformat, it can use deformat to print out error messages in that panic handler.
+So we'll just let panic probe be our panic handler going forward.
+I'm going to leave the dev or debug profile to be the default.
+It's going to be the same.
+And back in the third episode, we played with this release profile.
+I'm just going to copy that over from our USB serial example.
+So we'll set opt-level to S, LTO to true, code gen units to one, and strip to true.
+Let's save that.
+The only thing I'm going to change in the debug profile is I'm going to set code gen units to one to ensure that everything is compiled together.
+I don't think this will affect our debugging much, but just in case, this should allow us to do some step through debugging.
+Let's save that.
+Now let's go to main.rs.
+And we're going to remove this panic info because we are going to let panic probe handle all of the panics for us on the back end.
+We need to add a few imports here.
+To use deformat, we will say use deformat and star to include everything in that module.
+Then we're just going to say use deformat RTT as underscore.
+This just brings it into scope so that the top level deformat library can use it as the transport layer.
+We're not actually going to use RTT directly here.
+And then similarly, we're going to bring panic probe into scope, and we will set it as underscore, which means we're not going to use it directly.
+That just has a panic handler similar to this one in scope so that it gets called,
+which means we actually need to get rid of our custom panic handler and let panic probe handle it.
+deformat has a number of macros that we can use to output strings over the SWD port.
+Those, as you can probably guess, are the same names as the debug levels.
+So there's trace, debug, info, warn, and error.
+If we do info, exclamation point, starting blinky, this will print out starting blinky at the beginning of the program.
+We should see this fly by when we reset the program, assuming we have something connected and listening at that time.
+Let's scroll down to our loop, and let's put a couple of debug messages in here.
+So we're just going to say debug exclamation point.
+That is a deformat macro.
+This will have the host tool print LED on to the console, and we'll do the same with LED off whenever we turn off the LED.
+Now let's save this in our terminal.
+Let's go into blinky debug.
+We're going to say cargo build.
+If you wanted to build the release version of this, you have to take a couple of steps here.
+First, we need to go to our config.toml file in .cargo, and we need to get rid of this linker directive because this is storing the string lookup information in the binary.
+So we don't want that any longer.
+So we'd comment that out.
+Save that file.
+We would build with this variable set debug log equals off.
+That is overwriting this.
+So you could also change this to off here if you'd like.
+Then we would say cargo build dash dash release.
+That will build the release profile for us and disable logging.
+This isn't really an elegant solution.
+Note that you can create custom build scripts in Rust that run when you call this cargo build command in order to dynamically handle this, for example, commenting out certain lines.
+But we won't go into those.
+And it looks like I've got an error here.
+Oops, that environment variable should be d format log and not debug log.
+So this variable here being set should line up with this environment variable here.
+Let's try that again.
+Sure enough, that works.
+So we'll call cargo size.
+If you want to see the size, it looks like I'm getting an error here.
+D format timestamp.
+Oh, if you see this, that's because d format wants to have access to some sort of ability to.
+Time stamp.
+It's debug messages.
+And we don't really have that on this embedded system, at least not by default to enable that timestamp.
+We have to do this linking here and then d format knows how to use that timestamp appropriately for this particular system.
+So what we're going to do.
+Is say cargo size release because we should have disabled d format for this.
+So in theory, this should work.
+And it looks like it's still not working probably because we're trying to include d format here.
+And that means I need to actually say d format log equals off.
+We have to set that environment variable at least locally for this command.
+That should build in theory without d format.
+There we go.
+So you can see blinky is back down to its normal 1.8 kilobytes about.
+And now let's turn d format back on.
+So we're going to save that after uncommenting that line.
+And this should be good, which means we can call cargo size.
+And we're back up to that almost 48 kilobytes of flash size being used for our program, which includes all of that debugging information.
+Note that we're not going to call our Pico tool UF to convert feature here.
+And that's because we actually want to flash the elf file directly using a different tool on our host machine.
+To use the Raspberry Pi debug probe, you might need to install some drivers.
+If you're on Windows, you should go to Zadig.
+And this is at Zadig.A-K-E-O.I-E.
+Scroll down and download and install the version of Zadig that you see here, whatever's the newest.
+Once you've installed that, go ahead and run it.
+Go to options, list all devices.
+You should look for something that's called CM Sys DAP V2 interface.
+You'll want to make sure that the Win USB driver is what's being installed.
+Mine's already installed.
+So scroll through to select that one, the Win USB, and then click the install button to install the driver so that you can talk to your debug probe.
+Mine's already installed.
+So we can go ahead and install probe RS.
+This is a piece of software that needs to be installed on your host machine in order to talk directly to the debug probe.
+Notice the dash RS.
+This whole thing is written in Rust.
+So for Linux and macOS, run this command.
+For Windows, go ahead and run this command.
+This will download and install probe RS for you.
+If you're on Windows, you will need to manually add it to your path.
+So in PowerShell, we want to enter $env for environment variable, colon path.
+So this is the path environment variable.
+Equals, and then in quotation marks, C colon backslash users, backslash your username, which is S-G-M-U-S for me, backslash.cargo, backslash bin.
+And then semicolon, and then dollar sign, end, colon, path.
+This prepends the location of probe RS to your path so that you can call it directly.
+I won't run it because I've already run this.
+So let's just delete this line.
+So if you run probe RS, you should get some output here telling you how to use it with the following commands.
+We're going to use a few of these.
+If you say probe RS info, this will try connecting over JTAG and SWD.
+Notice that I'm getting a failure here.
+So let's try probe RS list.
+This should list the debug probe.
+So hence that CMSIS dap.
+That's that interface we see.
+And you've got an ID of the debug probe.
+So that means the debug probe is connected and talking to my computer.
+We can say probe RS info and protocol.
+Then we can list out the protocol so it doesn't even try to talk over JTAG.
+And let's say speed 1000.
+This is in kilohertz, so this should be 1 megahertz.
+If you're running into this problem, try unplugging your debug probe and plugging it back in.
+And running the command again.
+A good old turn it off and turn it back on again.
+And that seems to work this time.
+So now you should get information about the RP 2350 that it's been connected to.
+This is a lot of the metadata that's stored in memory.
+So if you're getting this, that means we can talk to it using probe RS.
+Note that the speed here is kilohertz.
+The default is 4000 kilohertz or 4 megahertz.
+And so slowing it down can sometimes help.
+So I'll leave it as a megahertz here.
+Feel free to bump it up if you want to try flashing or debugging a little faster.
+Let's go into our blinky debug project.
+We're going to call probe RS and then say run.
+We're going to give it the protocol of the SWD port.
+Speed.
+Let's keep it at 1 megahertz.
+We'll say chip RP 2350.
+235 X and then we will point it to the elf file.
+Notice we're not using a UF two file here.
+So from the current directory target thumb V eight debug and then blinky debug.
+That is our elf file with no extension.
+It looks like I need to add dash dash for chip.
+Press enter.
+That should erase and upload.
+Sure enough.
+You should see the info being printed here starting blinky and then LED on and off.
+These are the debugging messages that we wrote in our code.
+So now you can get fast messages from your device over the SWD port using the debug probe.
+Press control C to exit.
+Blinking some lights and getting these debug messages I would say is a fantastic way to start
+debugging your embedded projects using rust.
+If you'd like to go a little further I'll show you how to use GDB.
+Note that in my experience GDB with probe RS for the RP 2350 seems to be a little buggy right now.
+I'll demonstrate it but keep that in mind.
+Hopefully support for it will get better in the future.
+So if you're on Windows type IP config or on Linux something like if config.
+You will want to get your IP address because we are going to connect to this server that's running using GDB from within the container so we can look at our code as well.
+So my IP address is this 10.0.0.100.
+We will say probe RS GDB and our protocol SWD speed 1000 and chip RP 235x as we've been doing.
+Then we're going to give it this flag GDB connection string and we are going to listen on our IP address.
+So 10.0.0.100 that's on this local network or locally within the computer colon at 33033.
+That's the port we have set up in the docker image to forward so that we can connect out of the container over that port.
+So all you should see here is that this fires up a GDB stub.
+Let's go to the terminal.
+Notice that we are inside of our container now hence given by student at and then some ID here.
+Make sure you're in the blinky debug folder.
+GDB multi arc or architecture is installed by default.
+This is another tool that allows us to use GDB for various other architectures.
+That's not say like x86 because we are connecting to a ARM Cortex chip.
+Let's start it up and give it our blinky debug elf file that we've been using.
+It should be the same one that we flashed to the chip.
+So now we have GDB running.
+I'm going to press C to continue without paging.
+So now we have the GDB prompt in here.
+It accepts a number of GDB commands.
+I'm going to say target and then remote in order to connect to the server that's running.
+And that should be running at 10.0.0.100.
+That's my local IP address.
+Make sure to change it for yours.
+Colon 33.033.
+That's the specific port that the server is listening on.
+And it's the port that we've opened up on the image to allow traffic through it.
+So ideally it connects.
+In fact, you should see where it stopped in the code.
+So there's a command called monitor which passes commands directly to the server rather than running a GDB command.
+You will often see this abbreviated as mon.
+We're going to say reset and then halt.
+So that's going to reset the processor and then stop it before it runs any code.
+We're going to say break at main.
+So you can see it's added a breakpoint and main.rs line 27.
+In fact, we can control click and you can see the breakpoint is going to be right here in our code.
+Continue will start running.
+And then it hits our breakpoint.
+And now we can say list and you can see the code around it.
+And sure enough, that matches up with our code here.
+I'm going to type Q to quit to get out of this.
+And then I'm back at the prompt.
+So I'm going to type Q or quit.
+It's going to say a debugging session is active.
+Quit anyway.
+Yes.
+That disconnects from the server and drops me back to my terminal here.
+I'm going to show you how to get started with using VS code to debug.
+This gives you an optional GUI and you can click through to step through your code.
+This is where GDB really starts to break down in some of the bugginess.
+But I'm going to demonstrate how to get started.
+If you manage to get it working a little bit better,
+let us know in the comments and let us know what you did to get it working.
+But for now, stepping through manually with GDB command line functions seems to work well enough.
+And honestly, I use a lot of pin toggling and debugging messages
+to get me through most of my embedded projects.
+For this, I highly recommend the Cortex debug extension.
+This should be installed by default in the image.
+The other thing you'll want to make sure is that you have gone to file,
+open workspace from file, and loaded default code workspace.
+This also recommends or installs the necessary extensions for you.
+Let's close out of that extension page.
+In apps, let's create a .VS code folder.
+And we're going to create a launch.json.
+VS code knows to look in here and creates a launch profile based on this file.
+That will allow us to use the debug window in order to launch stuff,
+as well as debug and step through our code.
+In here, this is a .JSON file.
+So I'm going to say configurations.
+With that key is going to be an array.
+Then I'm going to open up a new section with curly braces.
+In there, I'll use the key name.
+This is the name of our configuration.
+Then the type is Cortex debug.
+We'll say attach for the request.
+We're going to create a new, essentially, variable below.
+That is of type input.
+And it will allow us to select the ELF path,
+because we might have different projects.
+We're not going to have any server arguments.
+It wants a current working directory,
+so we'll just give it this variable of workspace folder,
+wherever you're working in.
+Server type is external,
+which means we're connecting to another server.
+That is the Probe RS thing that we're running on the host machine.
+Object dump is a tool,
+usually found in something like Linux,
+to display information about object files,
+including things like executables and libraries.
+With ARM, it's used for things like disassembling machine code
+in order to give us more debugging information.
+So we have to tell it where to find that OBJ dump or object dump file.
+It also wants to know how to call GDB or the path to the GDB tool.
+We're using GDB multi-arch or multi-architecture.
+So let's just say, hey, call that tool instead of regular GDB.
+And this is the one you will need to change
+for your particular local IP address.
+Then we will define that input elf path variable.
+This ID name has to line up with the one given up here.
+So that's how it knows to use that variable.
+We can tell it to pick a string
+rather than having to type in the path manually.
+We'll have the user select the elf file,
+and it can come from these options.
+And as you add more projects to this debug list,
+you can add the target files here or your elf files here,
+which allows you to select them from a dropdown list.
+So let's save that.
+Once again, make sure your image is flashed and GDB is running.
+So if we bring this up, it has not exited.
+So it's firing up this GDB stub.
+So we're good.
+That server is running.
+One thing you'll notice is that we can't do deformat messages and GDB at the same time.
+So as we're running the server,
+you'll notice that none of those messages got printed here.
+So right now, as far as I can figure, it's one or the other.
+If you managed to get both working, let me know in the comments.
+All right.
+We're done with this launch.json,
+which means we can go to run and debug pane.
+So we're going to click the run button.
+This is where it drops down, and it says select elf file.
+That's that input that we put here.
+And we're going to select our blinky debug elf file.
+If we click reset,
+what I find is it immediately starts running,
+which isn't what we want.
+We want it to reset and then maybe hit a break point.
+So let's put a break point where we initialize our clocks.
+All right.
+So we'll click that little red dot here.
+You'll probably get a warning and an error that something failed.
+And this is where I find it struggles.
+Let's try resetting again.
+Ah, there we go.
+Now execution has hit this break point.
+Excellent.
+This is where you can look at, say, your local or global variables.
+You can set up a watch list for various variables.
+I find this works for variables you've set up in code,
+but it doesn't work well for things like memory addresses.
+If you want to get the actual state of the LED or various pins,
+there is a live watch down here where you could put things like memory values.
+But I find this does not work with a remote connection to GDB.
+So it doesn't work here.
+If you're running this all locally without going through that server connection,
+this might work for you.
+Once again, this is another one of those.
+This is a little buggy and iffy.
+If you get it working, let me know.
+But feel free to play around with it.
+I can try to step over and execute one line at a time.
+But you'll notice I start getting these warnings.
+Okay, so it executed that maybe.
+All right.
+It looks like we're still good.
+It's still running.
+I'm trying to go into and this is where it really messes up.
+See, I can't even step into code.
+I have to like run everything twice and I'm not stepping into the code.
+I find that setting breakpoints seems to work better than trying to step over or into stuff.
+So this is a little bit frustrating right now.
+As I mentioned, this is a bit iffy.
+I can't even step into this function.
+Oof.
+It looks like I'm in this function out of main.
+And let's try to step out.
+Oh, I cannot access memory at zero.
+All right, so it's still running.
+Let's try to reset here.
+And then this seems to be where it breaks.
+Setting breakpoints kind of works for this.
+Feel free to play around with it.
+But this is the extent of what I could get with debugging using VS Code with Rust and the RP2350.
+So if you manage to get it working better than this, let me know in the comments.
+Otherwise, as I mentioned, deformat is fast and works very well.
+So does toggling pins.
+And GDB on its own seems to be okay without any of this GUI plugin.
+Hopefully this will get better in the future.
+I hope this helps you get started debugging your embedded Rust projects, especially on Raspberry Pi microcontrollers.
+At this point, you should have all the tools you need to get started creating bare metal embedded Rust programs and have a decent working knowledge of the Rust language.
+In the next episode, we're going to look at the embassy framework for doing some cooperative multitasking.
+See you then.
+See you then.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+See you then.
+See you then.
+
+
+See you then.
+See you then.
+
+
+See you then.
+See you then.
+
+
+!
+See you then.
+!
