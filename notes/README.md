@@ -22,20 +22,20 @@ listings, diagrams, and tables.
 
 ## Lectures
 
-| #  | Title                                                          | Duration | Published   | Notes |
-|----|----------------------------------------------------------------|----------|-------------|-------|
-| 01 | What is Rust?                                                  | ~56 min  | 2026-01-22  | [01-What-is-Rust.md](01-What-is-Rust.md) |
-| 02 | Blink an LED                                                   | ~43 min  | 2026-01-29  | [02-Blink-an-LED.md](02-Blink-an-LED.md) |
-| 03 | USB Serial Logging and Debugging                               | ~27 min  | 2026-02-05  | [03-USB-Serial-Logging-and-Debugging.md](03-USB-Serial-Logging-and-Debugging.md) |
-| 04 | Ownership and Borrowing                                        | ~42 min  | 2026-02-12  | [04-Ownership-and-Borrowing.md](04-Ownership-and-Borrowing.md) |
-| 05 | Reading from an I2C Temperature Sensor (TMP102)                | ~27 min  | 2026-02-19  | [05-Reading-from-an-I2C-Temperature-Sensor.md](05-Reading-from-an-I2C-Temperature-Sensor.md) |
-| 06 | Generics and Traits                                            | ~27 min  | 2026-02-26  | [06-Generics-and-Traits.md](06-Generics-and-Traits.md) |
-| 07 | Creating a TMP102 Driver Library and Crate                     | ~25 min  | 2026-03-05  | [07-Creating-a-TMP102-Driver-Library-and-Crate.md](07-Creating-a-TMP102-Driver-Library-and-Crate.md) |
-| 08 | Lifetimes and Lifetime Annotations                             | ~24 min  | 2026-03-12  | [08-Lifetimes-and-Lifetime-Annotations.md](08-Lifetimes-and-Lifetime-Annotations.md) |
-| 09 | Test-Driven Development                                        | ~27 min  | 2026-03-19  | [09-Test-Driven-Development.md](09-Test-Driven-Development.md) |
-| 10 | Interrupts                                                     | ~22 min  | 2026-03-26  | [10-Interrupts.md](10-Interrupts.md) |
-| 11 | Logging with `defmt` and Step-through Debugging                | ~25 min  | 2026-04-02  | [11-Logging-with-defmt-and-Step-through-Debugging.md](11-Logging-with-defmt-and-Step-through-Debugging.md) |
-| 12 | Async Programming with Embassy                                 | ~39 min  | 2026-04-09  | [12-Async-Programming-with-Embassy.md](12-Async-Programming-with-Embassy.md) |
+| #   | Title                                           | Duration | Published  | Notes                                                                                                      |
+| --- | ----------------------------------------------- | -------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| 01  | What is Rust?                                   | ~56 min  | 2026-01-22 | [01-What-is-Rust.md](01-What-is-Rust.md)                                                                   |
+| 02  | Blink an LED                                    | ~43 min  | 2026-01-29 | [02-Blink-an-LED.md](02-Blink-an-LED.md)                                                                   |
+| 03  | USB Serial Logging and Debugging                | ~27 min  | 2026-02-05 | [03-USB-Serial-Logging-and-Debugging.md](03-USB-Serial-Logging-and-Debugging.md)                           |
+| 04  | Ownership and Borrowing                         | ~42 min  | 2026-02-12 | [04-Ownership-and-Borrowing.md](04-Ownership-and-Borrowing.md)                                             |
+| 05  | Reading from an I2C Temperature Sensor (TMP102) | ~27 min  | 2026-02-19 | [05-Reading-from-an-I2C-Temperature-Sensor.md](05-Reading-from-an-I2C-Temperature-Sensor.md)               |
+| 06  | Generics and Traits                             | ~27 min  | 2026-02-26 | [06-Generics-and-Traits.md](06-Generics-and-Traits.md)                                                     |
+| 07  | Creating a TMP102 Driver Library and Crate      | ~25 min  | 2026-03-05 | [07-Creating-a-TMP102-Driver-Library-and-Crate.md](07-Creating-a-TMP102-Driver-Library-and-Crate.md)       |
+| 08  | Lifetimes and Lifetime Annotations              | ~24 min  | 2026-03-12 | [08-Lifetimes-and-Lifetime-Annotations.md](08-Lifetimes-and-Lifetime-Annotations.md)                       |
+| 09  | Test-Driven Development                         | ~27 min  | 2026-03-19 | [09-Test-Driven-Development.md](09-Test-Driven-Development.md)                                             |
+| 10  | Interrupts                                      | ~22 min  | 2026-03-26 | [10-Interrupts.md](10-Interrupts.md)                                                                       |
+| 11  | Logging with `defmt` and Step-through Debugging | ~25 min  | 2026-04-02 | [11-Logging-with-defmt-and-Step-through-Debugging.md](11-Logging-with-defmt-and-Step-through-Debugging.md) |
+| 12  | Async Programming with Embassy                  | ~39 min  | 2026-04-09 | [12-Async-Programming-with-Embassy.md](12-Async-Programming-with-Embassy.md)                               |
 
 ## Learning Path
 
@@ -60,7 +60,7 @@ The notes can be read in order, or by theme:
 4. **Ownership and Borrowing** — stack/heap, the three ownership rules,
    move semantics, `Copy` vs `Clone`, references (`&T`, `&mut T`), the borrow
    checker, slices, embedded relevance.
-8. **Lifetimes and Lifetime Annotations** — why lifetimes exist, `'a` syntax,
+5. **Lifetimes and Lifetime Annotations** — why lifetimes exist, `'a` syntax,
    function and struct annotations, the three elision rules, `'static`,
    lifetimes in trait objects, DMA-buffer borrowing patterns.
 
