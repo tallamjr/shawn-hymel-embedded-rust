@@ -584,8 +584,8 @@ You should see the LED blink once per second. If it does not:
 The course expects a Raspberry Pi Pico / Pico 2 on a breadboard. The notes
 below document a deviation: running the same lecture material on a
 [1BitSquared Faultier](https://1bitsquared.com/products/faultier) carrier
-(RP2040-based), flashed from macOS 26 (Tahoe). The `blinky-rp2040` variant of
-the project (`workspace/apps/blinky-rp2040`) is the right starting point —
+(RP2040-based), flashed from macOS 26 (Tahoe). The `rp2040-blinky` variant of
+the project (`workspace/apps/rp2040-blinky`) is the right starting point —
 the Faultier hosts a soldered Pi Pico, not a Pico 2.
 
 #### Hardware deviations from the course recipe
@@ -593,26 +593,41 @@ the Faultier hosts a soldered Pi Pico, not a Pico 2.
 | Course assumption | Faultier reality |
 |-------------------|------------------|
 | LED wired to GPIO 15 via a breadboard + 220 Ω resistor | No external LED. Use the Pi Pico's onboard LED on **GPIO 25** (edit `pins.gpio15` → `pins.gpio25` in `main.rs`). |
-| Single Pi Pico board with one button (BOOTSEL) | Pi Pico mounted on the Faultier carrier; carrier adds **RESET** and **Trig** (glitch trigger) buttons of its own. **Trig is not reset** — pressing it lights an indicator LED but does nothing to the Pico. |
+| Single Pi Pico board with one button (BOOTSEL) | Pi Pico mounted on the Faultier carrier; carrier adds **RESET** and **Trig** (glitch trigger) buttons of its own. **Neither resets the Pi Pico.** `Trig` arms the glitcher and lights a `Trig` LED; `RESET` resets the fault-injection subsystem (analog switches, MOSFET driver) but is *not* wired to the Pico's RUN pin. The Pico can only be entered into BOOTSEL via the unplug-replug procedure below. |
 | Stock firmware ships from the factory | The Pico arrives with the Hextree `faultier` glitcher firmware. Flashing blinky overwrites it. Restore it later with the `faultier.uf2` from <https://github.com/hextreeio/faultier/releases>. |
 
-#### Entering BOOTSEL on a carrier-mounted Pico
+#### Entering BOOTSEL on a Faultier-mounted Pico
 
-Two procedures, both rely on the Pico's BOOTSEL button (top face, opposite
-the USB connector — small white tactile switch labelled `BOOTSEL`).
+The Pico's `BOOTSEL` button lives on the **top face of the Pi Pico itself**,
+near the edge opposite the USB connector — a small white tactile switch
+silkscreened `BOOTSEL`. It is the only button that can drop the Pico into
+its boot ROM.
 
-1. **Hold BOOTSEL → tap RESET → release BOOTSEL.** Cleanest, no
-   replug. Order matters: BOOTSEL must already be down when RESET releases,
-   because the RP2040 boot ROM only samples BOOTSEL during the power-up
-   window after reset.
-2. **Unplug USB → hold BOOTSEL → replug USB → keep holding for ~2 s.**
-   Fallback if RESET isn't wired through to the Pico's RUN pin on a given
-   carrier.
+The Faultier carrier's own `RESET` button does **not** reset the Pi Pico
+(it resets the glitch-target subsystem only), so the standard
+"hold BOOTSEL → tap RESET" trick used on stock Pi Pico breakouts does not
+apply here. The procedure that does work is to cycle USB power while
+holding the Pico's BOOTSEL button:
+
+1. **Unplug** the USB cable from the laptop and wait ~3 s for the on-board
+   capacitors to drain.
+2. **Press and hold** the Pi Pico's `BOOTSEL` button.
+3. **Replug** USB while still holding `BOOTSEL`.
+4. **Keep holding** for ~2 s after the cable seats, then release.
 
 > [!NOTE]
 > The `BOOTSEL` button is wired between the RP2040's `QSPI_SS` line and
 > ground. The boot ROM checks that line on every reset: if it is low,
-> bootloader; if it is high, jump to flash.
+> bootloader; if it is high, jump to flash. Because the Faultier's RESET
+> button does not toggle the Pico's RUN pin, the only way to make the boot
+> ROM run again is to power-cycle the chip via VBUS.
+
+> [!CAUTION]
+> An earlier revision of this note recommended a "Hold BOOTSEL → tap RESET
+> → release BOOTSEL" combo as the cleanest procedure. **That advice is
+> wrong on the Faultier** and was corrected after a live-session diagnostic
+> showed RESET does not affect the Pico's USB enumeration at all. The
+> unplug-replug procedure above is the only one that works on this carrier.
 
 #### macOS 26 (Tahoe) gotcha: `RPI-RP2` won't auto-mount
 
@@ -642,7 +657,7 @@ picotool info
 #  binary end:    0x1000f014
 
 # 2. Flash the UF2 produced by elf2uf2-rs / picotool uf2 convert
-picotool load path/to/blinky.uf2
+picotool load path/to/rp2040-blinky.uf2
 
 # 3. Reboot from BOOTSEL into application mode
 picotool reboot
@@ -655,10 +670,17 @@ so the Tahoe block is irrelevant.
 > [!IMPORTANT]
 > `picotool reboot -f -u` *only* works when the **currently running
 > firmware** exposes the picotool reset interface (a small USB descriptor
-> + `rom_func_reset_usb_boot()` call). Stock Hextree `faultier` firmware
-> does not, so the first flash always needs the hardware BOOTSEL dance.
-> Embassy's `embassy-rp` exposes this interface via the `picotool-reset`
-> feature — enable it in future apps to get button-free re-flashing.
+> + `rom_func_reset_usb_boot()` call) **and** the device's USB vendor ID
+> is `0x2e8a` (Raspberry Pi). `picotool` hard-codes that VID for its
+> reset-target match — the `--vid` flag only filters among already-matched
+> devices, it does not expand the set. Since the lecture's example uses
+> VID `0x16c0` (Van Ooijen hobbyist VID) for educational purposes, the
+> reset interface cannot drive `picotool` against it even if the
+> `usbd-picotool-reset` crate is wired in. Hardware BOOTSEL remains the
+> only path for this lecture's firmware. The trick *does* work for apps
+> that legitimately claim VID `0x2e8a:0x000a`, e.g. when prototyping under
+> a Raspberry Pi VID. Embassy's `embassy-rp` `picotool-reset` feature
+> follows the same constraint.
 
 #### What is SWD, and why can't `probe-rs` help here?
 
@@ -694,18 +716,18 @@ without hardware modification.
 #### One-liner build → flash from a clean checkout
 
 ```bash
-# From workspace/apps/blinky-rp2040
+# From workspace/apps/rp2040-blinky
 cargo build --release
-elf2uf2-rs target/thumbv6m-none-eabi/release/blinky blinky.uf2
-# Put the Pi Pico into BOOTSEL (hold BOOTSEL, tap RESET on the Faultier)
-picotool load blinky.uf2
+elf2uf2-rs target/thumbv6m-none-eabi/release/rp2040-blinky rp2040-blinky.uf2
+# Put the Pi Pico into BOOTSEL (unplug USB, hold the Pico's BOOTSEL, replug)
+picotool load rp2040-blinky.uf2
 picotool reboot
 # Onboard LED on GPIO 25 should blink at 1 Hz.
 ```
 
 > [!NOTE]
 > If a global `CARGO_TARGET_DIR` is set, the ELF will live under
-> `$CARGO_TARGET_DIR/thumbv6m-none-eabi/release/blinky` instead of the
+> `$CARGO_TARGET_DIR/thumbv6m-none-eabi/release/rp2040-blinky` instead of the
 > per-crate `target/`. Use `cargo metadata --no-deps | jq .target_directory`
 > to confirm.
 
@@ -715,7 +737,7 @@ The canonical example for this lecture is the RP2350 Pico 2 project. An RP2040
 variant is also provided for reference.
 
 - [`workspace/apps/blinky`](../workspace/apps/blinky) -- RP2350 (Raspberry Pi Pico 2), the build target used throughout this lecture.
-- [`workspace/apps/blinky-rp2040`](../workspace/apps/blinky-rp2040) -- RP2040 (original Raspberry Pi Pico) variant of the same blink program.
+- [`workspace/apps/rp2040-blinky`](../workspace/apps/rp2040-blinky) -- RP2040 (original Raspberry Pi Pico) variant of the same blink program.
 
 ## Quick Reference
 

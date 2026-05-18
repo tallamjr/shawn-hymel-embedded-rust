@@ -37,7 +37,6 @@ impl<P> Led<P>
 where
     P: OutputPin,
 {
-    
     // Instantiate a new Led
     fn new(pin: P, active_high: bool) -> Self {
         Self { pin, active_high }

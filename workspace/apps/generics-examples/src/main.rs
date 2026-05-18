@@ -65,7 +65,6 @@ where
 }
 
 fn demo_add() {
-
     // This works: T = i32
     let result_1 = add(-3, 10);
     println!("{}", result_1);
@@ -92,7 +91,6 @@ struct Pair<T, U> {
 }
 
 impl<T, U> Pair<T, U> {
-
     // Acts as a manual constructor
     fn new(first: T, second: U) -> Self {
         Pair { first, second }
@@ -124,7 +122,6 @@ enum Maybe<T> {
 }
 
 impl<T> Maybe<T> {
-
     // Panic if nothing, otherwise return the value in Something
     fn unwrap(self) -> T {
         match self {
@@ -158,3 +155,4 @@ fn main() {
     demo_struct();
     demo_enum();
 }
+
