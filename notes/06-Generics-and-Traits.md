@@ -448,6 +448,7 @@ The companion code for this lecture lives in two workspace apps:
 
 - [`workspace/apps/generics-examples`](../workspace/apps/generics-examples) -- host-side demos for the generic `swap`, the `Hello` trait, the `add` trait bound, the `Pair<T, U>` generic struct, and the `Maybe<T>` generic enum.
 - [`workspace/apps/led-wrapper`](../workspace/apps/led-wrapper) -- the embedded `Led<P: OutputPin>` wrapper running on the rp235x (Pico 2) with a blinky main loop.
+- [`workspace/apps/rp2040-led-wrapper`](../workspace/apps/rp2040-led-wrapper) -- equivalent port for the original Raspberry Pi Pico (RP2040). The generic `Led<P>` struct and its `impl` block are byte-for-byte identical to the rp235x version; only the chip boilerplate around them (HAL crate, boot artefact, `Timer` constructor, target triple) differs — the canonical demonstration of `embedded-hal` trait-driven portability that the lecture argues for.
 
 ---
 
