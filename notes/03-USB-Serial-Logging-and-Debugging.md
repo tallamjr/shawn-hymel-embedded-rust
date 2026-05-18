@@ -1,7 +1,7 @@
 # Lecture 03: USB Serial Logging and Debugging
 
 **Video:** https://www.youtube.com/watch?v=m6IKkkKZ6T0
-**Uploader:** DigiKey  **Duration:** ~27 min  **Published:** 2026-02-05
+**Uploader:** DigiKey **Duration:** ~27 min **Published:** 2026-02-05
 
 ## Table of Contents
 
@@ -38,10 +38,10 @@ The output of this lecture becomes the **template for all future debugging** in 
 
 The demonstration requires only the Pico 2 board; no external circuitry is connected. Two new Rust libraries are introduced:
 
-| Crate | Version | Role |
-| --- | --- | --- |
-| `usb-device` | 0.3.2 | Generic USB stack abstraction supporting many MCUs (including RP2350) |
-| `usbd-serial` | 0.2.2 | CDC ACM (Communications Device Class) implementation on top of `usb-device`, providing serial-over-USB |
+| Crate         | Version | Role                                                                                                   |
+| ------------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| `usb-device`  | 0.3.2   | Generic USB stack abstraction supporting many MCUs (including RP2350)                                  |
+| `usbd-serial` | 0.2.2   | CDC ACM (Communications Device Class) implementation on top of `usb-device`, providing serial-over-USB |
 
 The `usb-device` crate provides the low-level USB driver scaffolding; `usbd-serial` layers a serial port abstraction on top. Together they emit a virtual COM port that the host operating system recognises and exposes to terminal programs.
 
@@ -193,10 +193,10 @@ The `SerialPort` is constructed first because the `UsbDeviceBuilder::build()` ca
 
 Every USB device declares a 16-bit **Vendor ID (VID)** and **Product ID (PID)**. The host OS uses these to pick a driver.
 
-| Field | Value | Notes |
-| --- | --- | --- |
-| VID | `0x16C0` | Registered by Van Ooijen Technische Informatica; reused informally for hobbyist/prototype work |
-| PID | `0x27DD` | Recommended within that block for CDC-class devices |
+| Field | Value    | Notes                                                                                          |
+| ----- | -------- | ---------------------------------------------------------------------------------------------- |
+| VID   | `0x16C0` | Registered by Van Ooijen Technische Informatica; reused informally for hobbyist/prototype work |
+| PID   | `0x27DD` | Recommended within that block for CDC-class devices                                            |
 
 > [!CAUTION]
 > Official VID registration costs hundreds to thousands of pounds. Companies typically have their own VID. **Do not ship a product with `0x16C0`.** It is acceptable only for internal lab use and prototypes.
@@ -285,11 +285,11 @@ The main loop has three responsibilities, executed in order on every iteration:
 
 `match` is conceptually similar to C's `switch`, but it matches **patterns** (including enum variants with payload data) rather than only scalar values, and it returns a value. Three arms cover every possible outcome of `serial.read`:
 
-| Arm | Meaning |
-| --- | --- |
-| `Ok(0)` | Driver returned success with zero bytes — nothing to do |
-| `Ok(count)` | `count` bytes were placed in `buf`; useful payload |
-| `Err(e)` | Some USB-level error occurred |
+| Arm         | Meaning                                                 |
+| ----------- | ------------------------------------------------------- |
+| `Ok(0)`     | Driver returned success with zero bytes — nothing to do |
+| `Ok(count)` | `count` bytes were placed in `buf`; useful payload      |
+| `Err(e)`    | Some USB-level error occurred                           |
 
 The arrow `=>` separates the pattern from the expression that runs on a match. Because each arm can return a value, `match` can be used as an expression on the right-hand side of `let`, not only as a statement.
 
@@ -375,12 +375,12 @@ codegen-units = 1    # single compilation unit; better optimisation, slower buil
 strip = true         # remove debug symbols
 ```
 
-| Option | Effect |
-| --- | --- |
-| `opt-level = "s"` | Compiler favours code size over speed; `"z"` is even more aggressive |
-| `lto = true` | Cross-crate inlining and dead-code elimination at link time |
-| `codegen-units = 1` | Single unit enables more cross-function optimisation; longer compiles |
-| `strip = true` | Removes debug symbols entirely; smaller binary, harder step-through debugging |
+| Option              | Effect                                                                        |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `opt-level = "s"`   | Compiler favours code size over speed; `"z"` is even more aggressive          |
+| `lto = true`        | Cross-crate inlining and dead-code elimination at link time                   |
+| `codegen-units = 1` | Single unit enables more cross-function optimisation; longer compiles         |
+| `strip = true`      | Removes debug symbols entirely; smaller binary, harder step-through debugging |
 
 Build and measure:
 
@@ -441,14 +441,14 @@ The Pico 2's micro-USB port carries the same four lines plus a shield. Only `D+`
 
 This lecture demonstrates **printf-style logging** — emitting human-readable messages over a serial channel. It is the most accessible debugging technique and works on essentially any platform that can speak USB CDC, UART, or RTT.
 
-| Aspect | Printf logging (this lecture) | Step-through debugging (future) |
-| --- | --- | --- |
-| Hardware required | None beyond the target's USB port | Debug probe (e.g. CMSIS-DAP, J-Link, Pico Probe) |
-| Source modification | Yes — `serial.write` calls inserted | None — symbols suffice |
-| Runtime perturbation | Significant if logging is verbose | Minimal until a breakpoint hits |
-| Works at full speed | Yes (asynchronous via USB) | Halts the CPU at breakpoints |
-| Captures intermittent bugs | Yes, if log lines exist on the right path | Difficult without conditional breakpoints |
-| Binary size impact | Strings linked into flash | None at runtime |
+| Aspect                     | Printf logging (this lecture)             | Step-through debugging (future)                  |
+| -------------------------- | ----------------------------------------- | ------------------------------------------------ |
+| Hardware required          | None beyond the target's USB port         | Debug probe (e.g. CMSIS-DAP, J-Link, Pico Probe) |
+| Source modification        | Yes — `serial.write` calls inserted       | None — symbols suffice                           |
+| Runtime perturbation       | Significant if logging is verbose         | Minimal until a breakpoint hits                  |
+| Works at full speed        | Yes (asynchronous via USB)                | Halts the CPU at breakpoints                     |
+| Captures intermittent bugs | Yes, if log lines exist on the right path | Difficult without conditional breakpoints        |
+| Binary size impact         | Strings linked into flash                 | None at runtime                                  |
 
 In practice the two techniques are complementary: printf for tracing program flow and producing reproducible logs; a debugger for inspecting state at a single suspect instant.
 
@@ -494,10 +494,10 @@ Episode 04 will not touch hardware; it will instead focus on ownership and writi
 
 The code presented in this lecture corresponds to two demo crates in the workspace. The lecture targets the **Raspberry Pi Pico 2 (RP2350)**, so `apps/usb-serial` is the canonical reference; `apps/usb-serial-rp2040` is an equivalent port for the original Pico (RP2040).
 
-| App | Target | Manifest | Entry point |
-| --- | --- | --- | --- |
-| `usb-serial` (canonical) | RP2350 / Pico 2 | `workspace/apps/usb-serial/Cargo.toml` | `workspace/apps/usb-serial/src/main.rs` |
-| `usb-serial-rp2040` | RP2040 / Pico | `workspace/apps/usb-serial-rp2040/Cargo.toml` | `workspace/apps/usb-serial-rp2040/src/main.rs` |
+| App                      | Target          | Manifest                                      | Entry point                                    |
+| ------------------------ | --------------- | --------------------------------------------- | ---------------------------------------------- |
+| `usb-serial` (canonical) | RP2350 / Pico 2 | `workspace/apps/usb-serial/Cargo.toml`        | `workspace/apps/usb-serial/src/main.rs`        |
+| `usb-serial-rp2040`      | RP2040 / Pico   | `workspace/apps/usb-serial-rp2040/Cargo.toml` | `workspace/apps/usb-serial-rp2040/src/main.rs` |
 
 The two crates are deliberately near-identical; the differences are confined to the HAL crate (`rp235x-hal` vs `rp2040-hal`), the boot artefact (the RP2350 `ImageDef` block versus the RP2040 `BOOT2` array), the USB peripheral path names (`pac.USB` / `pac.USB_DPRAM` versus `pac.USBCTRL_REGS` / `pac.USBCTRL_DPRAM`), and the `Timer` constructor (`Timer::new_timer0(pac.TIMER0, ...)` versus `Timer::new(pac.TIMER, ...)`).
 
@@ -539,24 +539,24 @@ loop {
 
 ### Magic numbers used
 
-| Value | Meaning |
-| --- | --- |
-| `0x16C0` | Van Ooijen VID (lab/prototype use only) |
-| `0x27DD` | Recommended PID for CDC devices in that block |
-| `2` (`0x02`) | USB class code: Communications and CDC Control |
-| `64` | Receive buffer length in bytes (matches USB FS bulk MPS) |
-| `10 ms` | Maximum interval between `usb_dev.poll` calls |
-| `1_000` ms | One-second heartbeat period (via `Duration::to_millis`) |
+| Value        | Meaning                                                  |
+| ------------ | -------------------------------------------------------- |
+| `0x16C0`     | Van Ooijen VID (lab/prototype use only)                  |
+| `0x27DD`     | Recommended PID for CDC devices in that block            |
+| `2` (`0x02`) | USB class code: Communications and CDC Control           |
+| `64`         | Receive buffer length in bytes (matches USB FS bulk MPS) |
+| `10 ms`      | Maximum interval between `usb_dev.poll` calls            |
+| `1_000` ms   | One-second heartbeat period (via `Duration::to_millis`)  |
 
 ### Useful commands
 
-| Command | Purpose |
-| --- | --- |
-| `cargo build` | Debug build |
-| `cargo build --release` | Release build with optimised profile |
-| `cargo size` / `cargo size --release` | Inspect binary footprint |
-| `picotool uf2 convert <elf> -t elf firmware.uf2` | Convert ELF to UF2 |
-| `putty` / `minicom` / `screen` / `tio` | Host-side serial terminals |
+| Command                                          | Purpose                              |
+| ------------------------------------------------ | ------------------------------------ |
+| `cargo build`                                    | Debug build                          |
+| `cargo build --release`                          | Release build with optimised profile |
+| `cargo size` / `cargo size --release`            | Inspect binary footprint             |
+| `picotool uf2 convert <elf> -t elf firmware.uf2` | Convert ELF to UF2                   |
+| `putty` / `minicom` / `screen` / `tio`           | Host-side serial terminals           |
 
 ### Key crates and docs
 
@@ -564,3 +564,75 @@ loop {
 - [`usbd-serial`](https://crates.io/crates/usbd-serial) — CDC ACM serial class
 - [`rp235x-hal`](https://crates.io/crates/rp235x-hal) — RP2350 HAL with USB bus driver
 - [USB-IF Defined Class Codes](https://www.usb.org/defined-class-codes)
+
+## Practical Addendum: Did We Write a USB Driver?
+
+A natural question after building this example: _did we just write a USB
+driver?_ Strictly, **no** — we wrote an **application** that consumes
+several pre-existing drivers and stacks. The full picture is a small
+stack of layers, and we authored only the top one.
+
+| Layer                                                    | What it does                                                                                  | Who wrote it              |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------- |
+| Host OS CDC driver                                       | Presents `/dev/cu.usbmodem*` (macOS), `/dev/ttyACM*` (Linux), or `COMx` (Windows) to userland | The host operating system |
+| `usbd-serial` (firmware)                                 | Implements the **CDC ACM class** — endpoints, control requests, line coding                   | Upstream crate            |
+| `usb-device` (firmware)                                  | Generic USB device stack — enumeration, descriptors, control transfers                        | Upstream crate            |
+| `rp2040-hal::usb::UsbBus` (or `rp235x-hal::usb::UsbBus`) | Chip-specific USB peripheral driver — registers, DPRAM, ISR                                   | HAL maintainers           |
+| **Our `main.rs`**                                        | Wires up the bus, picks a class, sets VID/PID/strings, polls in a super loop                  | **You**                   |
+
+We _consumed_ four drivers and wrote roughly seventy lines of glue plus
+application logic. The board now appears as a USB serial device to the
+host because that combined stack — running on the Pico — emits the
+right enumeration sequence, the right CDC class code (`0x02`), and the
+right pair of bulk endpoints.
+
+> [!NOTE]
+> "Driver" depends on viewpoint. From the **host's** perspective the
+> firmware _is_ the driver: it is what gives the board its USB
+> personality. From the **firmware's** perspective, `usb::UsbBus` is the
+> driver for the chip's USB peripheral, and our `main.rs` is the
+> application sitting above it. The work that would qualify as
+> "writing a USB driver" in the strong sense is implementing a new USB
+> **class** (HID, MIDI, mass storage, vendor-specific) on top of
+> `usb-device`. The `usbd-*` crate family exists precisely so you
+> usually don't have to.
+
+### Measuring the heartbeat rate cleanly
+
+A subtle gotcha when verifying the once-per-second `hello!` heartbeat:
+a short measurement window can produce a wildly inflated rate. Running
+
+```bash
+timeout 3 cat /dev/cu.usbmodemTEST1
+```
+
+immediately after the board enumerates can show 20+ lines in 3 seconds.
+The firmware itself is correct — the host-side CDC driver has been
+**buffering** the heartbeats for the entire interval between firmware
+boot and the moment a userland program first opens the port. The
+backlog flushes in a single burst as soon as `cat` attaches.
+
+To measure the steady-state rate, **drain the queued data first** and
+then time a longer window. With Python and `pyserial`:
+
+```python
+import serial, time
+port = serial.Serial('/dev/cu.usbmodemTEST1', 115200, timeout=0.1)
+deadline = time.monotonic() + 1.0
+while time.monotonic() < deadline:    # drain ~1 second of backlog
+    port.read(1024)
+start, count = time.monotonic(), 0
+while time.monotonic() - start < 20.0:
+    count += port.read(1024).count(b"\n")
+elapsed = time.monotonic() - start
+print(f"{count} lines, {count/elapsed:.3f} Hz, period {1000*elapsed/count:.2f} ms")
+```
+
+A correctly working firmware reports something very close to `1.000 Hz`
+and `1000 ms`. Any meaningful deviation points at the timer or the
+super-loop logic — not at this measurement noise.
+
+> [!TIP]
+> The same drain-then-measure pattern applies to **any** USB CDC or
+> UART benchmark. Treat the first second of data after `open()` as
+> unreliable until proven otherwise.
