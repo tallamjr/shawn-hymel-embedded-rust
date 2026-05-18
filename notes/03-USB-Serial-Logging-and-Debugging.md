@@ -492,12 +492,12 @@ Episode 04 will not touch hardware; it will instead focus on ownership and writi
 
 ## Source Code
 
-The code presented in this lecture corresponds to two demo crates in the workspace. The lecture targets the **Raspberry Pi Pico 2 (RP2350)**, so `apps/usb-serial` is the canonical reference; `apps/usb-serial-rp2040` is an equivalent port for the original Pico (RP2040).
+The code presented in this lecture corresponds to two demo crates in the workspace. The lecture targets the **Raspberry Pi Pico 2 (RP2350)**, so `apps/usb-serial` is the canonical reference; `apps/rp2040-usb-serial` is an equivalent port for the original Pico (RP2040).
 
 | App                      | Target          | Manifest                                      | Entry point                                    |
 | ------------------------ | --------------- | --------------------------------------------- | ---------------------------------------------- |
 | `usb-serial` (canonical) | RP2350 / Pico 2 | `workspace/apps/usb-serial/Cargo.toml`        | `workspace/apps/usb-serial/src/main.rs`        |
-| `usb-serial-rp2040`      | RP2040 / Pico   | `workspace/apps/usb-serial-rp2040/Cargo.toml` | `workspace/apps/usb-serial-rp2040/src/main.rs` |
+| `rp2040-usb-serial`      | RP2040 / Pico   | `workspace/apps/rp2040-usb-serial/Cargo.toml` | `workspace/apps/rp2040-usb-serial/src/main.rs` |
 
 The two crates are deliberately near-identical; the differences are confined to the HAL crate (`rp235x-hal` vs `rp2040-hal`), the boot artefact (the RP2350 `ImageDef` block versus the RP2040 `BOOT2` array), the USB peripheral path names (`pac.USB` / `pac.USB_DPRAM` versus `pac.USBCTRL_REGS` / `pac.USBCTRL_DPRAM`), and the `Timer` constructor (`Timer::new_timer0(pac.TIMER0, ...)` versus `Timer::new(pac.TIMER, ...)`).
 

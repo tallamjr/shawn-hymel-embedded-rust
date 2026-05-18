@@ -1,5 +1,5 @@
 [package]
-name = "usb-serial"
+name = "rp2040-usb-serial"
 version = "0.1.0"
 edition = "2024"
 

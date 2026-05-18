@@ -1,5 +1,5 @@
 [package]
-name = "blinky"
+name = "rp2040-blinky"
 version = "0.1.0"
 edition = "2024"
 
