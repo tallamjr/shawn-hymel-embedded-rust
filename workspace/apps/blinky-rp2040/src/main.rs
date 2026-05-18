@@ -57,7 +57,10 @@ fn main() -> ! {
     );
 
     // Configure pin, get ownership of that pin
-    let mut led_pin = pins.gpio15.into_push_pull_output();
+    // GPIO25 is the Pi Pico's onboard user LED (GPIO15 in the course is for an
+    // external breadboard LED). Using GPIO25 lets us blink without extra wiring
+    // when the Pico is sitting on the Faultier carrier.
+    let mut led_pin = pins.gpio25.into_push_pull_output();
 
     // Move ownership of TIMER peripheral to create Timer struct
     let mut timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
