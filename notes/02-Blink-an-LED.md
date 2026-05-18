@@ -579,6 +579,136 @@ You should see the LED blink once per second. If it does not:
 > A Raspberry Pi Debug Probe lets you flash and debug the ELF directly,
 > skipping the UF2 step. Covered in a later episode.
 
+### Practical Addendum: Flashing on macOS Onto a 1BitSquared Faultier
+
+The course expects a Raspberry Pi Pico / Pico 2 on a breadboard. The notes
+below document a deviation: running the same lecture material on a
+[1BitSquared Faultier](https://1bitsquared.com/products/faultier) carrier
+(RP2040-based), flashed from macOS 26 (Tahoe). The `blinky-rp2040` variant of
+the project (`workspace/apps/blinky-rp2040`) is the right starting point —
+the Faultier hosts a soldered Pi Pico, not a Pico 2.
+
+#### Hardware deviations from the course recipe
+
+| Course assumption | Faultier reality |
+|-------------------|------------------|
+| LED wired to GPIO 15 via a breadboard + 220 Ω resistor | No external LED. Use the Pi Pico's onboard LED on **GPIO 25** (edit `pins.gpio15` → `pins.gpio25` in `main.rs`). |
+| Single Pi Pico board with one button (BOOTSEL) | Pi Pico mounted on the Faultier carrier; carrier adds **RESET** and **Trig** (glitch trigger) buttons of its own. **Trig is not reset** — pressing it lights an indicator LED but does nothing to the Pico. |
+| Stock firmware ships from the factory | The Pico arrives with the Hextree `faultier` glitcher firmware. Flashing blinky overwrites it. Restore it later with the `faultier.uf2` from <https://github.com/hextreeio/faultier/releases>. |
+
+#### Entering BOOTSEL on a carrier-mounted Pico
+
+Two procedures, both rely on the Pico's BOOTSEL button (top face, opposite
+the USB connector — small white tactile switch labelled `BOOTSEL`).
+
+1. **Hold BOOTSEL → tap RESET → release BOOTSEL.** Cleanest, no
+   replug. Order matters: BOOTSEL must already be down when RESET releases,
+   because the RP2040 boot ROM only samples BOOTSEL during the power-up
+   window after reset.
+2. **Unplug USB → hold BOOTSEL → replug USB → keep holding for ~2 s.**
+   Fallback if RESET isn't wired through to the Pico's RUN pin on a given
+   carrier.
+
+> [!NOTE]
+> The `BOOTSEL` button is wired between the RP2040's `QSPI_SS` line and
+> ground. The boot ROM checks that line on every reset: if it is low,
+> bootloader; if it is high, jump to flash.
+
+#### macOS 26 (Tahoe) gotcha: `RPI-RP2` won't auto-mount
+
+On Tahoe, the BOOTSEL device enumerates correctly, but the `RPI-RP2` FAT
+volume is silently blocked from mounting. `ls /Volumes/` shows nothing.
+`diskutil list external` reveals the disk; `diskutil mount` fails with:
+
+```text
+Volume on disk4s1 failed to mount: "Blocked"
+```
+
+This is a hardened-USB / Privacy & Security policy in newer macOS — the
+drag-and-drop step from the course no longer works out of the box. The
+clean workaround is to skip the mass-storage path entirely and flash over
+USB control transfers with `picotool`.
+
+#### Flashing with `picotool` (the reliable path on macOS)
+
+Install once: `brew install picotool`.
+
+```bash
+# 1. Put the board into BOOTSEL using the procedure above. Verify:
+picotool info
+# Program Information
+#  name:          faultier        <-- whatever was previously flashed
+#  binary start:  0x10000000
+#  binary end:    0x1000f014
+
+# 2. Flash the UF2 produced by elf2uf2-rs / picotool uf2 convert
+picotool load path/to/blinky.uf2
+
+# 3. Reboot from BOOTSEL into application mode
+picotool reboot
+```
+
+`picotool` talks to the RP2040 bootrom over USB control transfers and
+writes flash directly — it does **not** need the FAT volume to be mounted,
+so the Tahoe block is irrelevant.
+
+> [!IMPORTANT]
+> `picotool reboot -f -u` *only* works when the **currently running
+> firmware** exposes the picotool reset interface (a small USB descriptor
+> + `rom_func_reset_usb_boot()` call). Stock Hextree `faultier` firmware
+> does not, so the first flash always needs the hardware BOOTSEL dance.
+> Embassy's `embassy-rp` exposes this interface via the `picotool-reset`
+> feature — enable it in future apps to get button-free re-flashing.
+
+#### What is SWD, and why can't `probe-rs` help here?
+
+**SWD (Serial Wire Debug)** is ARM's 2-wire on-chip debug protocol —
+`SWCLK` (clock) plus `SWDIO` (bidirectional data) plus ground. It wires
+into the CPU's debug logic, so it can halt the core, read or write any
+register or memory address, single-step instructions, program flash, and
+stream logs back over the same link — completely independently of whatever
+firmware is running, or even whether the firmware has crashed.
+
+`probe-rs` is the host-side tool that speaks SWD. To do so it needs a
+**debug probe**: a separate USB device that translates host commands into
+SWD electrical signals on the target's pins. Without one in the loop, the
+laptop only has USB, which the RP2040's boot ROM or running firmware
+expose — not SWD.
+
+The current Faultier setup has a single USB cable straight to the Pi Pico
+and nothing on the Pico's SWD pads, so `probe-rs` is not an option today.
+It becomes available once either of these is added:
+
+- A **Raspberry Pi Debug Probe** (~£12) wired to the Pico's `SWCLK`,
+  `SWDIO`, and `GND` pads at the bottom edge of the board. Standard
+  hobbyist setup. Unlocks `probe-rs run` (flash) plus `defmt` log
+  streaming over RTT — covered in lecture 11.
+- A spare RP2040 board running **`picoprobe`** firmware, acting as a probe
+  on its own GPIOs.
+
+Side note: the Faultier's "integrated SWD probe" mentioned on its product
+page is wired *outward* to attack target chips it glitches — not back to
+its own Pi Pico — so it cannot be repurposed to flash the Faultier itself
+without hardware modification.
+
+#### One-liner build → flash from a clean checkout
+
+```bash
+# From workspace/apps/blinky-rp2040
+cargo build --release
+elf2uf2-rs target/thumbv6m-none-eabi/release/blinky blinky.uf2
+# Put the Pi Pico into BOOTSEL (hold BOOTSEL, tap RESET on the Faultier)
+picotool load blinky.uf2
+picotool reboot
+# Onboard LED on GPIO 25 should blink at 1 Hz.
+```
+
+> [!NOTE]
+> If a global `CARGO_TARGET_DIR` is set, the ELF will live under
+> `$CARGO_TARGET_DIR/thumbv6m-none-eabi/release/blinky` instead of the
+> per-crate `target/`. Use `cargo metadata --no-deps | jq .target_directory`
+> to confirm.
+
 ## Source Code
 
 The canonical example for this lecture is the RP2350 Pico 2 project. An RP2040
